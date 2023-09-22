@@ -1,0 +1,2137 @@
+navigation problems
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:epubz/epubz.dart';
+import 'package:epubz/epubz.dart' as epubz;
+import 'package:html/parser.dart';
+import 'package:image/image.dart' as image;
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+class ReaderPage extends StatefulWidget {
+  final String path;
+  const ReaderPage({
+    Key? key,
+    required this.path,
+  }) : super(key: key);
+
+  @override
+  _ReaderPageState createState() => _ReaderPageState();
+}
+
+class _ReaderPageState extends State<ReaderPage>
+    with SingleTickerProviderStateMixin {
+  epubz.EpubBook? epubBook;
+  // late double pageWidth = MediaQuery.of(context).size.width;
+  // late double pageHeight = MediaQuery.of(context).size.height;
+  late String epubContent;
+  InAppWebViewController? webViewController;
+  String? title;
+  int totalPages = 0;
+  late double fontSize; // Default font size
+
+  // late final UserLocationManager locationManager;
+  late PageManager pageManager;
+  // late final ChapterManager chapterManager;
+
+  // late int currentChapterIndex; // To keep track of the current chapter
+  // late double scrollX = 0; // Initialize scroll position
+  // int currentPageIndex = 0;
+  // int currentPage = 0; // Track the current page
+
+  @override
+  void initState() {
+    super.initState();
+    fontSize = 56.0; // Initial font size
+    pageManager = PageManager();
+    initialize();
+  }
+
+  Future<void> initialize() async {
+    final file = File(widget.path);
+    final bytes = await file.readAsBytes();
+    epubBook = await epubz.EpubReader.readBook(bytes);
+    // Calculate the total pages based on chapters and sections
+    totalPages = pageManager.calculateTotalPages(epubBook!);
+    epubContent = generateHtmlContent(epubBook!, pageManager.currentPage);
+
+    // currentChapterIndex = 0; // Initialize the current chapter index
+    // chapterManager = ChapterManager(
+    //     epubBook!.Schema!.Package!.Spine!.Items!.cast<SpineItem>());
+    // Use savedLocation to navigate to the last read position
+    // locationManager = UserLocationManager(
+    //   epubBook!.Title!,
+    //   pageManager,
+    //   chapterManager,
+    //   // currentChapterIndex
+    // );
+    // await locationManager.loadLocation();
+    // await locationManager.loadSavedPage(webViewController!, pageWidth);
+    // setState(() {
+    // Update the UI after initializing
+    // pageManager =
+    //     PageManager(epubBook!.Schema!.Package!.Spine!.Items!.length);
+    // pageManager = PageManager(
+    //   pageManager.calculateTotalPages(epubBook!.Chapters!),
+    // );
+
+    // totalPages = epubBook!.Schema!.Package!.Spine!.Items!.length;
+    // title = epubBook!.Title;
+    // });
+    // spineFiles =
+    //     epubBook!.Schema!.Package!.Spine!.Items!.cast<EpubContentFile>();
+  }
+
+  // Create a new HTML page
+  String generateHtmlContent(epubz.EpubBook book, int currentPageIndex) {
+    String html = "<html><head>";
+    // String html = "<html><head>";
+    html += "<style>";
+    html += "body {";
+    html += "margin: 28px 28px 20px;";
+    // html += "font-size: 2.3em;";
+    html += "{font-size}em;"; // Use the updated fontsize
+    html += "line-height: 1.6;";
+    html += "font-weight: normal;";
+    html += "letter-spacing: 0;";
+    html += "word-spacing: 0;";
+    html += "text-align: left;";
+    html += "font-family: Arial;";
+    html += "font-path: '';";
+
+    html += "}";
+    html += "h1 { font-size: 1.6em; }"; // Adjust heading styles as needed
+    html += "h2 { font-size: 1.4em; }"; // Adjust heading styles as needed
+    html += "p { margin: 1em 0; }"; // Add some margin between paragraphs
+    // html += "white-space: nowrap;"; // Prevent text wrapping
+    // html += "overflow-x: scroll;"; // Enable horizontal scrolling
+    // html += "display: flex;"; // Add flex display for horizontal scrolling
+    // html += "flex-direction: row;"; // Layout children in a row
+
+    // html += "}";
+    html += "</style>";
+    html += "</head><body>";
+
+    int currentPageIndex = pageManager.currentPage;
+
+    int currentSectionIndex = 0; // Track current section index within a chapter
+    int currentChapterIndex = 0;
+    // Iterate through chapters and sections to render current page's content
+    for (var chapter in book.Chapters!) {
+      for (var section in chapter.SubChapters!) {
+        if (currentPageIndex == 0) {
+          // Render the content for the current page
+          html += "<h1>${chapter.Title}</h1>";
+          html += "<h2>${section.Title}</h2>";
+          if (section.HtmlContent is String) {
+            html += "<p>${section.HtmlContent}</p>";
+          } else if (section.HtmlContent is epubz.EpubContent) {
+            var content = section.HtmlContent as epubz.EpubContent;
+            for (var file in content.Html!.values) {
+              html += "<p>${file.Content}</p>";
+            }
+          }
+          // Break the loop when the current page content is rendered
+          break;
+        }
+        // Update currentPageIndex and section index
+        currentPageIndex--;
+        currentSectionIndex++;
+
+        // Check if there are more pages in the current section
+        if (currentSectionIndex >= section.SubChapters!.length) {
+          // Move to the next chapter
+          // currentChapterIndex++;
+          currentSectionIndex = 0;
+        }
+      }
+      // Check if the desired page content has been found
+      // if (currentPageIndex == 0) {
+      //   break;
+      // }
+    }
+///////////////////////////////////////
+    // for (var chapter in book.Chapters!) {
+    //   for (var section in chapter.SubChapters!) {
+    //     if (currentPageIndex == 0) {
+    //       // Render the content for the current page
+    //       html += "<h1>${chapter.Title}</h1>";
+    //       html += "<h2>${section.Title}</h2>";
+    //       if (section.HtmlContent is String) {
+    //         html += "<p>${section.HtmlContent}</p>";
+    //       } else if (section.HtmlContent is epubz.EpubContent) {
+    //         var content = section.HtmlContent as epubz.EpubContent;
+    //         for (var file in content.Html!.values) {
+    //           html += "<p>${file.Content}</p>";
+    //         }
+    //       }
+    //       break;
+    //     }
+    //     // Update currentPageIndex
+    //     currentPageIndex--;
+    //   }
+    // }
+/////////////////////////////////
+    // for (var chapter in book.Chapters!) {
+    //   html += "<h1>${chapter.Title}</h1>";
+    //   for (var section in chapter.SubChapters!) {
+    //     html += "<h2> ${section.Title}</h2>";
+    //     if (section.HtmlContent is String) {
+    //       html += "<p>${section.HtmlContent}</p>";
+    //     } else if (section.HtmlContent is epubz.EpubContent) {
+    //       var content = section.HtmlContent as epubz.EpubContent;
+    //       for (var file in content.Html!.values) {
+    //         html += "<p>${file.Content}</p>";
+    //       }
+    //     }
+    //   }
+    // }
+    // for (var chapter in book.Chapters!) {
+    //   for (var section in chapter.SubChapters!) {
+    //     if (section.HtmlContent is String) {
+    //       html +=
+    //           "<div style='margin: 0 28px;'>"; // Add margin for each chapter/section
+    //       html += "<p>${section.HtmlContent}</p>";
+    //       html += "</div>";
+    //     } else if (section.HtmlContent is epubz.EpubContent) {
+    //       var content = section.HtmlContent as epubz.EpubContent;
+    //       for (var file in content.Html!.values) {
+    //         html +=
+    //             "<div style='margin: 0 28px;'>"; // Add margin for each chapter/section
+    //         html += "<p>${file.Content}</p>";
+    //         html += "</div>";
+    //       }
+    //     }
+    //   }
+    // }
+    html += "</body></html>";
+    return html;
+  }
+
+  // Future<void> saveCurrentPage() async {
+  //   await locationManager.saveLocation();
+  // }
+
+  // Future<void> onChapterSelected(int chapterIndex) async {
+  //   await chapterManager.navigateToChapter(chapterIndex);
+  //   locationManager.saveLocation();
+  //   // Update the webview or navigation based on the selected chapter
+  //   // updateWebViewContent();
+  //   setState(() {});
+  // }
+
+  // void handleInternalLink(Uri uri) {
+  //   // Extract chapter and page information from the URI
+  //   // Example: /chapter-2/page-3
+  //   String chapterPath = uri.pathSegments[0];
+  //   String pagePath = uri.pathSegments[1];
+
+  //   // Convert chapterPath and pagePath to chapter index and page index
+  //   int chapterIndex =
+  //       int.parse(chapterPath.split('-')[1]) - 1; // Convert to 0-based index
+  //   int pageIndex =
+  //       int.parse(pagePath.split('-')[1]) - 1; // Convert to 0-based index
+
+  //   // Update pageManager.currentPage and locationManager accordingly
+  //   pageManager.updateCurrentPage(pageIndex);
+  //   locationManager.pageManager.updateCurrentPage(pageIndex);
+  //   locationManager.chapterManager.navigateToChapter(chapterIndex);
+  // }
+
+  // // Define a function to handle navigation to a specific page
+  // Future<void> navigateToPage(int pageIndex) async {
+  //   try {
+  //     print('navigate to page started');
+  //     final double scrollOffset = pageIndex * pageWidth;
+  //     await webViewController?.scrollTo(
+  //         x: scrollOffset.toInt(), y: 0, animated: false);
+  //     setState(() {
+  //       currentPageIndex = pageIndex; // Update the current page index
+  //     });
+  //     // pageManager.currentPage = pageIndex;
+  //     // updateWebViewContent(); // Update the content when navigating to a new page
+  //   } catch (e) {
+  //     print('error navigating to page: $e');
+  //   }
+  // }
+
+  // // Method to update WebView content
+  // Future<void> updateWebViewContent(String newContent) async {
+  //   if (webViewController != null) {
+  //     // final newHtmlCOntent = generateHtmlContent(epubBook!);
+  //     await webViewController!
+  //         .loadData(data: newContent, mimeType: 'text/html');
+  //   }
+  // }
+
+  Future<void> loadPageContent() async {
+    if (epubBook != null) {
+      // epubContent = generateHtmlContent(epubBook!, currentPageIndex);
+      String newHtmlContent =
+          generateHtmlContent(epubBook!, pageManager.currentPage);
+      setState(() {
+        epubContent = newHtmlContent;
+      }); // Trigger a rebuild to update content
+      webViewController?.loadData(data: epubContent, mimeType: 'text/html');
+    }
+  }
+
+  void goToNextPage() {
+    if (pageManager.currentPage < totalPages - 1) {
+      pageManager.nextPage();
+      loadPageContent();
+    }
+  }
+
+  void goToPreviousPage() {
+    if (pageManager.currentPage > 0) {
+      pageManager.previousPage();
+      loadPageContent();
+    }
+  }
+
+  void changeFontSize(double newFontSize) {
+    if (newFontSize >= 1 && newFontSize <= 5) {
+      setState(() {
+        fontSize = newFontSize;
+      });
+      // Reload content with new font size
+      loadPageContent();
+    }
+  }
+
+  @override
+  void dispose() {
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    // saveCurrentPage(); // Save the current page when the reader is disposed
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (epubBook == null || epubContent == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    // pageWidth = MediaQuery.of(context).size.width;
+    // pageHeight = MediaQuery.of(context).size.height;
+
+    return Scaffold(
+      // appBar: AppBar(
+      //   title: const Text('book reader'),
+      // ),
+      // End of AppBar
+      // drawer: Drawer(
+      // child: EpubViewTableOfContents(controller: _epubReaderController),
+      // ),
+
+      body: GestureDetector(
+        // Handle swipe gestures for next/previous page
+        onHorizontalDragEnd: (details) {
+          if (details.primaryVelocity! > 0) {
+            // Swipe right, go to previous page
+            // if (pageManager.currentPage > 0) {
+            //   pageManager.currentPage -= 1;
+            // navigateToPage(pageManager.currentPage);
+            // }
+            // setState(() {
+            //   pageManager.previousPage();
+            //   loadPageContent();
+            // });
+            goToPreviousPage();
+          } else if (details.primaryVelocity! < 0) {
+            // Swipe left, go to next page
+            // if (pageManager.currentPage < totalPages - 1) {
+            //   pageManager.currentPage += 1;
+            //   // navigateToPage(pageManager.currentPage);
+            // }
+            // setState(() {
+            //   pageManager.nextPage();
+            //   loadPageContent();
+            // });
+            goToNextPage();
+          }
+        },
+        onScaleUpdate: (details) {
+          final newFontSize = fontSize * details.scale;
+          // if (newFontSize >= 1 && newFontSize <= 5) {
+          //   setState(() {
+          //     fontSize = newFontSize;
+          //   });
+          // }
+          changeFontSize(newFontSize);
+        },
+        child: Stack(
+          children: [
+            InAppWebView(
+              initialData: InAppWebViewInitialData(
+                data: epubContent,
+                mimeType: 'text/html',
+              ),
+              initialOptions: InAppWebViewGroupOptions(
+                  crossPlatform: InAppWebViewOptions(
+                useShouldOverrideUrlLoading: true,
+                javaScriptEnabled: true,
+              )),
+              onWebViewCreated: (controller) {
+                // Add your code here to handle web view events
+                webViewController = controller;
+                // Navigate to the saved page index when web view is created
+                // locationManager.loadSavedPage(webViewController!, pageWidth);
+                // // Load the current page content here
+                // webViewController!.loadData(
+                //   data: epubContent,
+                //   mimeType: 'text/html',
+                // );
+              },
+              onConsoleMessage: (controller, consoleMessage) {
+                // Handle console messages from the web view
+                print('Console Message: ${consoleMessage.message}');
+              },
+              onLoadStop: (controller, url) async {
+                // await locationManager.loadSavedPage(
+                //     webViewController!, pageHeight);
+                // // await webViewController!.scrollTo(x: scrollX.toInt(), y: 0);
+                // webViewController!.scrollTo(
+                //     x: pageManager.currentPage * pageWidth.toInt(),
+                //     y: 0,
+                //     animated: false);
+                // // Render the new page when the web view is loaded
+                // webViewController!.evaluateJavascript(
+                //     source: 'document.body.style.fontSize = "${fontSize}px"');
+              },
+              onScrollChanged: (controller, x, y) {
+                // Calculate the current page
+                // final int newPageIndex = (x / pageWidth).toInt();
+
+                // setState(() {
+                //   currentPageIndex = newPageIndex;
+                // });
+                // pageManager.updateCurrentPage(currentPage);
+                // locationManager.pageManager.updateCurrentPage(currentPage);
+                // saveCurrentPage(); // Save the current page on scroll
+              },
+              // shouldOverrideUrlLoading: (controller, navigationAction) async {
+              //   // Allow loading other URLs and external links
+              //   final uri = Uri.parse(navigationAction.request.url!.toString());
+              //   if (uri.host == 'your.epub.site') {
+              //     // Handle internal links
+              //     handleInternalLink(uri);
+              //     return NavigationActionPolicy.CANCEL;
+              //   } else {
+              //     // Handle external links
+              //     launchUrl(uri); // Using the launch package
+              //     return NavigationActionPolicy.ALLOW;
+              //   }
+              // },
+            ),
+            // Positioned(
+            //     child: LinearProgressIndicator(
+            //   value: pageManager.currentPage / totalPages,
+            //   // Change the value based on the current page and total pages
+            //   backgroundColor: Colors.blueGrey,
+            //   valueColor: const AlwaysStoppedAnimation<Color>(Colors.red),
+            // ))
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// class UserLocationManager {
+//   final String bookTitle;
+//   final PageManager pageManager; // Reference to the PageManager class
+//   final ChapterManager chapterManager;
+//   UserLocationManager(String bookTitle, this.pageManager, this.chapterManager)
+//       : this.bookTitle = bookTitle;
+
+//   Future<void> loadLocation() async {
+//     final jsonFile = await _getLocationFile();
+//     print('book title load is $bookTitle');
+//     try {
+//       if (jsonFile.existsSync()) {
+//         final jsonString = json.decode(jsonFile.readAsStringSync());
+//         final location = jsonString['location'];
+//         if (location is int) {
+//           print('location is int');
+//           pageManager.updateCurrentPage(location);
+//         } else {
+//           print('location is not int');
+//         }
+//       }
+//     } catch (error) {
+//       print('Error loading location: $error');
+//     }
+//   }
+
+//   Future<void> saveLocation() async {
+//     print('book title for losave is $bookTitle');
+//     final jsonFile = await _getLocationFile();
+//     // try {
+//     // final jsonString = json.decode(jsonFile.readAsStringSync());
+//     final jsonString = json.encode({'location': pageManager.currentPage});
+//     // jsonString['location'] = pageManager.currentPage;
+//     try {
+//       // await jsonFile.writeAsString(json.encode(jsonString));
+//       await jsonFile.writeAsString(jsonString);
+//     } catch (error) {
+//       print('Error saving location: $error');
+//     }
+//   }
+
+//   Future<void> loadSavedPage(
+//       InAppWebViewController controller, double pageWidth) async {
+//     // double pageHeight = 0;
+//     // late double pageHeight = MediaQuery.of(context).size.height;
+//     // pageHeight = MediaQuery.of(context).size.height;
+
+//     final double scrollOffset = pageManager.currentPage * pageWidth;
+//     await controller.scrollTo(x: scrollOffset.toInt(), y: 0, animated: false);
+//   }
+
+//   Future<File> _getLocationFile() async {
+//     var appDir = await getExternalStorageDirectory();
+//     var jsonPath = "${appDir!.path}/ebooks/data";
+//     final fileName = '$bookTitle.json';
+//     print('filename is $fileName');
+//     return File('$jsonPath/$fileName');
+//   }
+// }
+
+class SpineItem {
+  final String title;
+  final String contentFileName;
+
+  SpineItem(this.title, this.contentFileName);
+}
+
+class PageManager {
+  int currentPage = 6; // Default current page is the first page
+  // Total number of pages in the entire document
+  int totalPages = 0;
+
+  int calculateTotalPages(epubz.EpubBook book) {
+    int total = 0;
+    for (var chapter in book.Chapters!) {
+      for (var section in chapter.SubChapters!) {
+        total++; // increment the total fo each section
+        // print('total is $total');
+      }
+    }
+    return total;
+  }
+
+  void nextPage() {
+    print('next page is clicked');
+    print('current  page is $currentPage');
+    print('total paegs is $totalPages');
+    // if (currentPage < totalPages - 1) {
+    //   currentPage = currentPage + 1;
+    //   print('next page is ${currentPage++}');
+    // }
+    if (currentPage < totalPages - 1) {
+      currentPage++;
+    }
+  }
+
+  void previousPage() {
+    print('previous page is clicked');
+    print('current  page is $currentPage');
+    // if (currentPage > 0) {
+    //   currentPage = currentPage - 1;
+    //   print('previous page is ${currentPage--}');
+    // }
+    if (currentPage > 0) {
+      currentPage--;
+    }
+  }
+
+  // void updateCurrentPage(int newPageIndex) {
+  //   currentPage = newPageIndex;
+  //   print('currentpage is $currentPage');
+  // }
+}
+
+class ChapterManager {
+  final List<SpineItem> spineItems;
+
+  ChapterManager(this.spineItems);
+
+  List<String> getChapterTitles() {
+    return spineItems.map((item) => item.title).toList();
+  }
+
+  Future<void> navigateToChapter(int index) async {
+    final contentFileName = spineItems[index].contentFileName;
+// Use contentFileName to navigate to the chapter content
+// You can use the webViewController to navigate in WebView
+  }
+}
+
+
+//////////////////////////////////////////////////////////////////////////////////
+total pages calculated by variable width 4541
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:epubz/epubz.dart';
+import 'package:epubz/epubz.dart' as epubz;
+import 'package:html/parser.dart';
+import 'package:image/image.dart' as image;
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+class ReaderPage extends StatefulWidget {
+  final String path;
+  const ReaderPage({
+    Key? key,
+    required this.path,
+  }) : super(key: key);
+
+  @override
+  _ReaderPageState createState() => _ReaderPageState();
+}
+
+class _ReaderPageState extends State<ReaderPage>
+    with SingleTickerProviderStateMixin {
+  epubz.EpubBook? epubBook;
+  late double pageWidth = MediaQuery.of(context).size.width;
+  late double pageHeight = MediaQuery.of(context).size.height;
+  late String epubContent;
+  InAppWebViewController? webViewController;
+  String? title;
+  late final UserLocationManager locationManager;
+  late final PageManager pageManager;
+  late final ChapterManager chapterManager;
+
+  late int currentChapterIndex; // To keep track of the current chapter
+  late double scrollX = 0; // Initialize scroll position
+  double fontSize = 32.3; // Default font size
+  int totalPages = 0;
+  int currentPageIndex = 0;
+  late PageCalculator pageCalculator;
+  double contentWidth = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    pageManager = PageManager();
+    // pageCalculator = PageCalculator(0, 0);
+    // webViewController
+    //     ?.evaluateJavascript(source: 'document.body.scrollWidth;')
+    //     .then((value) {
+    //   setState(() {
+    //     contentWidth = double.tryParse(value) ?? 0;
+    //     pageCalculator = PageCalculator(pageWidth, contentWidth);
+    //     totalPages = pageCalculator.calculateTotalPages();
+    //   });
+    // });
+    initialize();
+  }
+
+  Future<void> initialize() async {
+    File file = File(widget.path);
+    List<int> bytes = await file.readAsBytes();
+    epubBook = await epubz.EpubReader.readBook(bytes);
+    epubContent = generateHtmlContent(epubBook!);
+
+    currentChapterIndex = 0; // Initialize the current chapter index
+    chapterManager = ChapterManager(
+        epubBook!.Schema!.Package!.Spine!.Items!.cast<SpineItem>());
+    // Use savedLocation to navigate to the last read position
+    locationManager = UserLocationManager(
+      epubBook!.Title!,
+      pageManager,
+      chapterManager,
+      // currentChapterIndex
+    );
+    await locationManager.loadLocation();
+    // await locationManager.loadSavedPage(webViewController!, pageWidth);
+    setState(() {}); // Update the UI after initializing
+
+    // Calculate content width dynamically
+    final double contentWidth = calculateContentWidth(epubBook!);
+
+    pageWidth = MediaQuery.of(context).size.width;
+    pageHeight = MediaQuery.of(context).size.height;
+    pageCalculator = PageCalculator(pageWidth, contentWidth);
+    // Initialize totalPages based on the font size, device orientation, etc.
+    setState(() {
+      totalPages = pageCalculator.calculateTotalPages();
+    });
+    // totalPages = epubBook!.Schema!.Package!.Spine!.Items!.length;
+    title = epubBook!.Title;
+    // spineFiles =
+    //     epubBook!.Schema!.Package!.Spine!.Items!.cast<EpubContentFile>();
+  }
+
+  // Create a new HTML document
+  String generateHtmlContent(epubz.EpubBook book) {
+    // String html = "<html><body>";
+    String html = "<html><head>";
+    html += "<style>";
+    html += "body {";
+    html += "margin: 28px 28px 20px;";
+    // html += "margin: 20px 0px;";
+    // html += "font-size: 2.3em;";
+    html += "font-size: ${fontSize}px;"; // Use the user-selected font size
+    html += "line-height: 1.6;";
+    html += "font-weight: normal;";
+    html += "letter-spacing: 0;";
+    html += "word-spacing: 0;";
+    html += "text-align: left;";
+    html += "font-family: Arial;";
+    html += "letter-spacing: 0;";
+    html += "word-spacing: 0;";
+    html += "text-align: left;";
+    html += "font-family: Arial;";
+    html += "font-path: '';";
+
+    html += "}";
+    html += "h1 { font-size: 1.6em; }"; // Adjust heading styles as needed
+    html += "h2 { font-size: 1.4em; }"; // Adjust heading styles as needed
+    html += "p { margin: 1em 0; }"; // Add some margin between paragraphs
+    // html += "white-space: nowrap;"; // Prevent text wrapping
+    // html += "overflow-x: scroll;"; // Enable horizontal scrolling
+    // html += "display: flex;"; // Add flex display for horizontal scrolling
+    // html += "flex-direction: row;"; // Layout children in a row
+
+    // html += "}";
+    html += "</style>";
+    html += "</head><body>";
+    // for (var chapter in book.Chapters!) {
+    //   html += "<h1>${chapter.Title}</h1>";
+    //   for (var section in chapter.SubChapters!) {
+    //     html += "<h2> ${section.Title}</h2>";
+    //     if (section.HtmlContent is String) {
+    //       html += "<p>${section.HtmlContent}</p>";
+    //     } else if (section.HtmlContent is epubz.EpubContent) {
+    //       var content = section.HtmlContent as epubz.EpubContent;
+    //       for (var file in content.Html!.values) {
+    //         html += "<p>${file.Content}</p>";
+    //       }
+    //     }
+    //   }
+    // }
+    for (var chapter in book.Chapters!) {
+      for (var section in chapter.SubChapters!) {
+        if (section.HtmlContent is String) {
+          html +=
+              "<div style='margin: 0 28px;'>"; // Add margin for each chapter/section
+          html += "<p>${section.HtmlContent}</p>";
+          html += "</div>";
+        } else if (section.HtmlContent is epubz.EpubContent) {
+          var content = section.HtmlContent as epubz.EpubContent;
+          for (var file in content.Html!.values) {
+            html +=
+                "<div style='margin: 0 28px;'>"; // Add margin for each chapter/section
+            html += "<p>${file.Content}</p>";
+            html += "</div>";
+          }
+        }
+      }
+    }
+    html += "</body></html>";
+    return html;
+  }
+
+  Future<void> saveCurrentPage() async {
+    await locationManager.saveLocation();
+  }
+
+  Future<void> onChapterSelected(int chapterIndex) async {
+    await chapterManager.navigateToChapter(chapterIndex);
+    locationManager.saveLocation();
+    // Update the webview or navigation based on the selected chapter
+    // updateWebViewContent();
+    setState(() {});
+  }
+
+  void handleInternalLink(Uri uri) {
+    // Extract chapter and page information from the URI
+    // Example: /chapter-2/page-3
+    String chapterPath = uri.pathSegments[0];
+    String pagePath = uri.pathSegments[1];
+
+    // Convert chapterPath and pagePath to chapter index and page index
+    int chapterIndex =
+        int.parse(chapterPath.split('-')[1]) - 1; // Convert to 0-based index
+    int pageIndex =
+        int.parse(pagePath.split('-')[1]) - 1; // Convert to 0-based index
+
+    // Update pageManager.currentPage and locationManager accordingly
+    pageManager.updateCurrentPage(pageIndex);
+    locationManager.pageManager.updateCurrentPage(pageIndex);
+    locationManager.chapterManager.navigateToChapter(chapterIndex);
+  }
+
+  double calculateContentWidth(epubz.EpubBook book) {
+    double totalWidth = 0.0; // Initialize the total width to zero
+
+    // Iterate through the chapters or sections of the EPUB book
+    for (var chapter in epubBook!.Chapters!) {
+      for (var section in chapter.SubChapters!) {
+        // Simplified width calculation, adjust as needed
+        double sectionWidth = section.HtmlContent.toString().length.toDouble();
+        totalWidth += sectionWidth;
+      }
+    }
+
+    return totalWidth;
+  }
+
+  // Define a function to handle navigation to a specific page
+  Future<void> navigateToPage(int pageIndex) async {
+    try {
+      print('navigate to page started');
+      if (pageIndex >= 0 && pageIndex < totalPages) {
+        // final double scrollOffset = pageIndex * pageWidth;
+        final double scrollOffset = pageCalculator.getPageOffset(pageIndex);
+        await webViewController?.scrollTo(
+            x: scrollOffset.toInt(), y: 0, animated: false);
+        setState(() {
+          currentPageIndex = pageIndex; // Update the current page index
+        });
+        // pageManager.currentPage = pageIndex;
+        // updateWebViewContent(); // Update the content when navigating to a new page
+      }
+    } catch (e) {
+      print('error navigating to page: $e');
+    }
+  }
+
+  // Method to update WebView content
+  Future<void> updateWebViewContent(String newContent) async {
+    if (webViewController != null) {
+      // final newHtmlCOntent = generateHtmlContent(epubBook!);
+      await webViewController!
+          .loadData(data: newContent, mimeType: 'text/html');
+    }
+  }
+
+  @override
+  void dispose() {
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    saveCurrentPage(); // Save the current page when the reader is disposed
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (epubBook == null || epubContent == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    // pageWidth = MediaQuery.of(context).size.width;
+    // pageHeight = MediaQuery.of(context).size.height;
+    // totalPages = pageCalculator.calculateTotalPages();
+    return OrientationBuilder(
+      builder: (context, orientation) {
+        pageWidth = orientation == Orientation.portrait
+            ? MediaQuery.of(context).size.width
+            : MediaQuery.of(context).size.height;
+        totalPages = pageCalculator.calculateTotalPages();
+        // Return your main widget here...
+
+        return Scaffold(
+          // appBar: AppBar(
+          //   title: const Text('book reader'),
+          // ),
+          // End of AppBar
+          // drawer: Drawer(
+          // child: EpubViewTableOfContents(controller: _epubReaderController),
+          // ),
+
+          body: GestureDetector(
+            onHorizontalDragEnd: (details) {
+              if (details.primaryVelocity! > 0) {
+                // Swipe right, go to previous page
+                if (pageManager.currentPage > 0) {
+                  pageManager.currentPage -= 1;
+                  navigateToPage(pageManager.currentPage);
+                  print('swipepd right');
+                  print('total pages is $totalPages');
+                }
+              } else if (details.primaryVelocity! < 0) {
+                // Swipe left, go to next page
+                print('total pages is $totalPages');
+                if (pageManager.currentPage < totalPages - 1) {
+                  pageManager.currentPage += 1;
+                  navigateToPage(pageManager.currentPage);
+                  print('swipepd left');
+                  print('total pages is $totalPages');
+                } else {
+                  if (totalPages > 0) {
+                    print('Reached the last page.');
+                  } else {
+                    print('Error swiping left: Total pages is 0.');
+                  }
+                }
+              }
+            },
+            onScaleUpdate: (details) {
+              final newFontSize = fontSize * details.scale;
+              if (newFontSize >= 1 && newFontSize <= 5) {
+                setState(() {
+                  fontSize = newFontSize;
+                });
+              }
+            },
+            child: Stack(
+              children: [
+                InAppWebView(
+                  initialData: InAppWebViewInitialData(
+                    data: epubContent,
+                    mimeType: 'text/html',
+                  ),
+                  initialOptions: InAppWebViewGroupOptions(
+                      crossPlatform: InAppWebViewOptions(
+                    useShouldOverrideUrlLoading: true,
+                    javaScriptEnabled: true,
+                  )),
+                  onWebViewCreated: (controller) {
+                    // Add your code here to handle web view events
+                    webViewController = controller;
+                    // Navigate to the saved page index when web view is created
+                    locationManager.loadSavedPage(
+                        webViewController!, pageWidth);
+                    // Load the current page content here
+                    webViewController!.loadData(
+                      data: epubContent,
+                      mimeType: 'text/html',
+                    );
+                  },
+                  onConsoleMessage: (controller, consoleMessage) {
+                    // Handle console messages from the web view
+                    print('Console Message: ${consoleMessage.message}');
+                  },
+                  onLoadStop: (controller, url) async {
+                    await locationManager.loadSavedPage(
+                        webViewController!, pageHeight);
+                    // await webViewController!.scrollTo(x: scrollX.toInt(), y: 0);
+                    webViewController!.scrollTo(
+                        x: pageManager.currentPage * pageWidth.toInt(),
+                        y: 0,
+                        animated: false);
+                    // // Render the new page when the web view is loaded
+                    // webViewController!.evaluateJavascript(
+                    //     source: 'document.body.style.fontSize = "${fontSize}px"');
+                  },
+                  onScrollChanged: (controller, x, y) {
+                    // Calculate the current page
+                    final int newPageIndex = (x / pageWidth).toInt();
+
+                    setState(() {
+                      currentPageIndex = newPageIndex;
+                    });
+                    // pageManager.updateCurrentPage(currentPage);
+                    // locationManager.pageManager.updateCurrentPage(currentPage);
+                    saveCurrentPage(); // Save the current page on scroll
+                  },
+                  shouldOverrideUrlLoading:
+                      (controller, navigationAction) async {
+                    // Allow loading other URLs and external links
+                    final uri =
+                        Uri.parse(navigationAction.request.url!.toString());
+                    if (uri.host == 'your.epub.site') {
+                      // Handle internal links
+                      handleInternalLink(uri);
+                      return NavigationActionPolicy.CANCEL;
+                    } else {
+                      // Handle external links
+                      launchUrl(uri); // Using the launch package
+                      return NavigationActionPolicy.ALLOW;
+                    }
+                  },
+                ),
+                Positioned(
+                    child: LinearProgressIndicator(
+                  // value: pageManager.currentPage / totalPages,
+                  value: totalPages > 0
+                      ? (currentPageIndex + 1) / totalPages
+                      : 0.0,
+                  // Change the value based on the current page and total pages
+                  backgroundColor: Colors.blueGrey,
+                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.red),
+                ))
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class UserLocationManager {
+  final String bookTitle;
+  final PageManager pageManager; // Reference to the PageManager class
+  final ChapterManager chapterManager;
+  UserLocationManager(String bookTitle, this.pageManager, this.chapterManager)
+      : this.bookTitle = bookTitle;
+
+  Future<void> loadLocation() async {
+    final jsonFile = await _getLocationFile();
+    print('book title load is $bookTitle');
+    try {
+      if (jsonFile.existsSync()) {
+        final jsonString = json.decode(jsonFile.readAsStringSync());
+        final location = jsonString['location'];
+        if (location is int) {
+          print('location is int');
+          pageManager.updateCurrentPage(location);
+        } else {
+          print('location is not int');
+        }
+      }
+    } catch (error) {
+      print('Error loading location: $error');
+    }
+  }
+
+  Future<void> saveLocation() async {
+    print('book title for losave is $bookTitle');
+    final jsonFile = await _getLocationFile();
+    // try {
+    // final jsonString = json.decode(jsonFile.readAsStringSync());
+    final jsonString = json.encode({'location': pageManager.currentPage});
+    // jsonString['location'] = pageManager.currentPage;
+    try {
+      // await jsonFile.writeAsString(json.encode(jsonString));
+      await jsonFile.writeAsString(jsonString);
+    } catch (error) {
+      print('Error saving location: $error');
+    }
+  }
+
+  Future<void> loadSavedPage(
+      InAppWebViewController controller, double pageWidth) async {
+    // double pageHeight = 0;
+    // late double pageHeight = MediaQuery.of(context).size.height;
+    // pageHeight = MediaQuery.of(context).size.height;
+
+    final double scrollOffset = pageManager.currentPage * pageWidth;
+    await controller.scrollTo(x: scrollOffset.toInt(), y: 0, animated: false);
+  }
+
+  Future<File> _getLocationFile() async {
+    var appDir = await getExternalStorageDirectory();
+    var jsonPath = "${appDir!.path}/ebooks/data";
+    final fileName = '$bookTitle.json';
+    print('filename is $fileName');
+    return File('$jsonPath/$fileName');
+  }
+}
+
+class SpineItem {
+  final String title;
+  final String contentFileName;
+
+  SpineItem(this.title, this.contentFileName);
+}
+
+class PageManager {
+  int currentPage = 5; // Default current page is the first page
+
+  void updateCurrentPage(int newPageIndex) {
+    currentPage = newPageIndex;
+    print('currentpage is $currentPage');
+  }
+}
+
+class PageCalculator {
+  final double pageWidth;
+  final double contentWidth;
+
+  PageCalculator(this.pageWidth, this.contentWidth);
+
+  int calculateTotalPages() {
+    return (contentWidth / pageWidth).ceil();
+  }
+
+  double getPageOffset(int pageIndex) {
+    return pageIndex * pageWidth;
+  }
+
+  int getPageIndex(double scrollOffset) {
+    return (scrollOffset / pageWidth).floor();
+  }
+}
+
+class ChapterManager {
+  final List<SpineItem> spineItems;
+
+  ChapterManager(this.spineItems);
+
+  List<String> getChapterTitles() {
+    return spineItems.map((item) => item.title).toList();
+  }
+
+  Future<void> navigateToChapter(int index) async {
+    final contentFileName = spineItems[index].contentFileName;
+// Use contentFileName to navigate to the chapter content
+// You can use the webViewController to navigate in WebView
+  }
+}
+
+///////////////////////////////////////////////
+//updated generateHtmlContent to a class
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+// import 'package:epubz/epubz.dart';
+// import 'package:epubz/epubz.dart' as epubz;
+import 'package:epubx/epubx.dart';
+import 'package:epubx/epubx.dart' as epubx;
+import 'package:html/parser.dart';
+import 'package:image/image.dart' as image;
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+class ReaderPage extends StatefulWidget {
+  final String path;
+  final Function(String) onTextSelected; // Callback for selected text
+  const ReaderPage({
+    Key? key,
+    required this.path,
+    required this.onTextSelected,
+  }) : super(key: key);
+
+  @override
+  _ReaderPageState createState() => _ReaderPageState();
+}
+
+class _ReaderPageState extends State<ReaderPage>
+    with SingleTickerProviderStateMixin {
+  // epubz.EpubBook? epubBook;
+  epubx.EpubBook? epubBook;
+  late double pageWidth = MediaQuery.of(context).size.width;
+  late double pageHeight = MediaQuery.of(context).size.height;
+  late String epubContent;
+  InAppWebViewController? webViewController;
+  String? title;
+  late final UserLocationManager locationManager;
+  late final PageManager pageManager;
+  late final ChapterManager chapterManager;
+  late HtmlContent htmlContent;
+
+  late int currentChapterIndex; // To keep track of the current chapter
+  late double scrollX = 0; // Initialize scroll position
+  double fontSize = 32.3; // Default font size
+  int totalPages = 0;
+  int currentPageIndex = 0;
+
+  // Track the selected text
+  String selectedText = "";
+
+  @override
+  void initState() {
+    super.initState();
+    pageManager = PageManager();
+    initialize();
+  }
+
+  Future<void> initialize() async {
+    File file = File(widget.path);
+    List<int> bytes = await file.readAsBytes();
+    // epubBook = await epubz.EpubReader.readBook(bytes);
+    epubBook = await epubx.EpubReader.readBook(bytes);
+    // epubContent = generateHtmlContent(epubBook!);
+
+    currentChapterIndex = 0; // Initialize the current chapter index
+    chapterManager = ChapterManager(
+        epubBook!.Schema!.Package!.Spine!.Items!.cast<SpineItem>());
+    // Use savedLocation to navigate to the last read position
+    locationManager = UserLocationManager(
+      epubBook!.Title!,
+      pageManager,
+      chapterManager,
+      // currentChapterIndex
+    );
+    await locationManager.loadLocation();
+    // await locationManager.loadSavedPage(webViewController!, pageWidth);
+    setState(() {}); // Update the UI after initializing
+
+    totalPages = epubBook!.Schema!.Package!.Spine!.Items!.length;
+    title = epubBook!.Title;
+    htmlContent = HtmlContent(epubBook!, fontSize);
+
+    // spineFiles =
+    //     epubBook!.Schema!.Package!.Spine!.Items!.cast<EpubContentFile>();
+  }
+
+  Future<void> saveCurrentPage() async {
+    await locationManager.saveLocation();
+  }
+
+  Future<void> onChapterSelected(int chapterIndex) async {
+    await chapterManager.navigateToChapter(chapterIndex);
+    locationManager.saveLocation();
+    // Update the webview or navigation based on the selected chapter
+    // updateWebViewContent();
+    setState(() {});
+  }
+
+  void handleInternalLink(Uri uri) {
+    // Extract chapter and page information from the URI
+    // Example: /chapter-2/page-3
+    String chapterPath = uri.pathSegments[0];
+    String pagePath = uri.pathSegments[1];
+
+    // Convert chapterPath and pagePath to chapter index and page index
+    int chapterIndex =
+        int.parse(chapterPath.split('-')[1]) - 1; // Convert to 0-based index
+    int pageIndex =
+        int.parse(pagePath.split('-')[1]) - 1; // Convert to 0-based index
+
+    // Update pageManager.currentPage and locationManager accordingly
+    pageManager.updateCurrentPage(pageIndex);
+    locationManager.pageManager.updateCurrentPage(pageIndex);
+    locationManager.chapterManager.navigateToChapter(chapterIndex);
+  }
+
+  @override
+  void dispose() {
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    saveCurrentPage(); // Save the current page when the reader is disposed
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (epubBook == null || epubContent == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    pageWidth = MediaQuery.of(context).size.width;
+    pageHeight = MediaQuery.of(context).size.height;
+
+    return Scaffold(
+      // appBar: AppBar(
+      //   title: const Text('book reader'),
+      // ),
+      // End of AppBar
+      // drawer: Drawer(
+      // child: EpubViewTableOfContents(controller: _epubReaderController),
+      // ),
+
+      body:
+          // GestureDetector(
+          //   onScaleUpdate: (details) {
+          //     final newFontSize = fontSize * details.scale;
+          //     if (newFontSize >= 1 && newFontSize <= 5) {
+          //       setState(() {
+          //         fontSize = newFontSize;
+          //       });
+          //     }
+          //   },
+          // child:
+          Stack(
+        children: [
+          InAppWebView(
+            initialData: InAppWebViewInitialData(
+              // data: epubContent,
+              // data: generateHtmlContent(book),
+              data: htmlContent.generateContent(),
+              mimeType: 'text/html',
+            ),
+            initialOptions: InAppWebViewGroupOptions(
+                crossPlatform: InAppWebViewOptions(
+              useShouldOverrideUrlLoading: true,
+              javaScriptEnabled: true,
+              // Inject JavaScript to capture text selection
+              // Note: This JavaScript snippet is just an example and may need adjustment
+              // based on the specifics of your EPUB content.
+              // injectedJavaScript: '''
+              //   window.getSelection().toString();
+              // ''',
+            )),
+            onWebViewCreated: (controller) {
+              webViewController = controller;
+              // Set up a JavaScript handler to capture selected text
+              locationManager.loadSavedPage(webViewController!, pageWidth);
+              // Add a JavaScript handler to capture selected text
+              webViewController!.addJavaScriptHandler(
+                handlerName: 'onTextSelection',
+                callback: (args) {
+                  setState(() {
+                    selectedText = args[0];
+                    print('selected text');
+                  });
+                },
+              );
+            },
+            onConsoleMessage: (controller, consoleMessage) {
+              // Handle console messages from the web view
+              print('Console Message: ${consoleMessage.message}');
+            },
+            onLoadStop: (controller, url) async {
+              await locationManager.loadSavedPage(
+                  webViewController!, pageHeight);
+              // Inject JavaScript to capture text selection
+              // Note: This JavaScript snippet is just an example and may need adjustment
+              // based on the specifics of your EPUB content.
+              final javascript = '''
+              document.addEventListener("mouseup", function() {
+                const selectedText = window.getSelection().toString();
+                window.flutter_inappwebview.callHandler("onTextSelection", selectedText);
+              });
+            ''';
+              await controller.evaluateJavascript(source: javascript);
+            },
+            onScrollChanged: (controller, x, y) {
+              saveCurrentPage(); // Save the current page on scroll
+            },
+            shouldOverrideUrlLoading: (controller, navigationAction) async {
+              // Allow loading other URLs and external links
+              final uri = Uri.parse(navigationAction.request.url!.toString());
+              if (uri.host == 'your.epub.site') {
+                // Handle internal links
+                handleInternalLink(uri);
+                return NavigationActionPolicy.CANCEL;
+              } else {
+                // Handle external links
+                launchUrl(uri); // Using the launch package
+                return NavigationActionPolicy.ALLOW;
+              }
+            },
+          ),
+          Positioned(
+              child: LinearProgressIndicator(
+            value: pageManager.currentPage / totalPages,
+            // Change the value based on the current page and total pages
+            backgroundColor: Colors.blueGrey,
+            valueColor: const AlwaysStoppedAnimation<Color>(Colors.red),
+          )),
+          // Show the toolbar if selected text is not empty
+          if (selectedText.isNotEmpty)
+            // print('selected text');
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Container(
+                // color: Colors.white,
+                color: Colors.red,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Add your toolbar options here, such as copy, note, highlight, bookmark
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+      // ),
+    );
+  }
+}
+
+class HtmlContent {
+  final EpubBook book;
+  final double fontSize;
+  HtmlContent(this.book, this.fontSize);
+  // double fontSize = 32.3; // Default font size
+
+  // Create a new HTML document
+  String generateContent() {
+    String html = "<html><head>";
+    html +=
+        "<meta name='viewport' content='width=device-width, initial-scale=1.0";
+    html += "<link rel='stylesheet' type='text/css' href='styles.css'>";
+    html += "</head><body>";
+
+    // Add a table of contents
+    html += "<div class='toc'>";
+    html += "<h1>Table of Contents</h1>";
+    for (var chapter in book.Chapters!) {
+      // for (var chapter in book.Content!.Chapters) {
+      // Create clickable links to chapters
+      html += "<a href='#chapter${chapter.Anchor}'>${chapter.Title}</a><br>";
+    }
+    html += "</div>";
+
+    // Display each chapter
+    for (var chapter in book.Chapters!) {
+      // for (var chapter in book.Content!.Chapters) {
+      // html += "<div class ='chapter-title'>";
+      // html += "<h2>${chapter.Title}</h2>"; // Display chapter title
+      // html += "</div";
+      html += "<div class='chapter'>";
+      // Add an anchor to link to this chapter
+      html += "<a name='chapter${chapter.Anchor}'></a>";
+      html += "<h2>${chapter.Title}</h2>"; // Display chapter title
+      html += "${chapter.HtmlContent}"; // Display chapter content
+      html += "</div>";
+      for (var section in chapter.SubChapters!) {
+        html += "<div class='chapter'>";
+        html += "<p>${section.HtmlContent}</p>";
+        html += "</div>";
+      }
+    }
+    html += "</body></html>";
+    return html;
+  }
+}
+
+class UserLocationManager {
+  final String bookTitle;
+  final PageManager pageManager; // Reference to the PageManager class
+  final ChapterManager chapterManager;
+  UserLocationManager(String bookTitle, this.pageManager, this.chapterManager)
+      : this.bookTitle = bookTitle;
+
+  Future<void> loadLocation() async {
+    final jsonFile = await _getLocationFile();
+    print('book title load is $bookTitle');
+    try {
+      if (jsonFile.existsSync()) {
+        final jsonString = json.decode(jsonFile.readAsStringSync());
+        final location = jsonString['location'];
+        if (location is int) {
+          print('location is int');
+          pageManager.updateCurrentPage(location);
+        } else {
+          print('location is not int');
+        }
+      }
+    } catch (error) {
+      print('Error loading location: $error');
+    }
+  }
+
+  Future<void> saveLocation() async {
+    print('book title for losave is $bookTitle');
+    final jsonFile = await _getLocationFile();
+    // try {
+    // final jsonString = json.decode(jsonFile.readAsStringSync());
+    final jsonString = json.encode({'location': pageManager.currentPage});
+    // jsonString['location'] = pageManager.currentPage;
+    try {
+      // await jsonFile.writeAsString(json.encode(jsonString));
+      await jsonFile.writeAsString(jsonString);
+    } catch (error) {
+      print('Error saving location: $error');
+    }
+  }
+
+  Future<void> loadSavedPage(
+      InAppWebViewController controller, double pageWidth) async {
+    // double pageHeight = 0;
+    // late double pageHeight = MediaQuery.of(context).size.height;
+    // pageHeight = MediaQuery.of(context).size.height;
+
+    final double scrollOffset = pageManager.currentPage * pageWidth;
+    await controller.scrollTo(x: scrollOffset.toInt(), y: 0, animated: false);
+  }
+
+  Future<File> _getLocationFile() async {
+    var appDir = await getExternalStorageDirectory();
+    var jsonPath = "${appDir!.path}/ebooks/data";
+    final fileName = '$bookTitle.json';
+    print('filename is $fileName');
+    return File('$jsonPath/$fileName');
+  }
+}
+
+class SpineItem {
+  final String title;
+  final String contentFileName;
+
+  SpineItem(this.title, this.contentFileName);
+}
+
+class PageManager {
+  int currentPage = 5; // Default current page is the first page
+
+  void updateCurrentPage(int newPageIndex) {
+    currentPage = newPageIndex;
+    print('currentpage is $currentPage');
+  }
+}
+
+class ChapterManager {
+  final List<SpineItem> spineItems;
+
+  ChapterManager(this.spineItems);
+
+  List<String> getChapterTitles() {
+    return spineItems.map((item) => item.title).toList();
+  }
+
+  Future<void> navigateToChapter(int index) async {
+    final contentFileName = spineItems[index].contentFileName;
+// Use contentFileName to navigate to the chapter content
+// You can use the webViewController to navigate in WebView
+  }
+}
+
+////////////////////////////////////////////////////////
+use inappwebview and epubx to load the document
+import 'dart:async';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:epubx/epubx.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'textselectiontoolbar.dart';
+
+class ReaderPage extends StatefulWidget {
+  final EpubBook epubBook;
+  final String selectedChapterId; // Receive selectedChapterId
+  final Function(String, double, double) onTextSelection;
+
+  const ReaderPage({
+    Key? key,
+    required this.epubBook,
+    required this.selectedChapterId, // Declare selectedChapterId
+    required this.onTextSelection,
+  }) : super(key: key);
+
+  @override
+  _ReaderPageState createState() => _ReaderPageState();
+}
+// @override
+// Widget build(BuildContext context) {
+//   // Find the selected chapter using the selectedChapterId
+//   EpubChapter selectedChapter = epubBook.Chapters!.firstWhere(
+//     (chapter) => chapter.Anchor == selectedChapterId,
+//     orElse: () => epubBook.Chapters!.first,
+//   );
+
+//   return SingleChildScrollView(
+//     padding: const EdgeInsets.all(16.0),
+//     child: Html(data: selectedChapter.HtmlContent),
+//   );
+// }
+// }
+class _ReaderPageState extends State<ReaderPage> {
+  String selectedText = "";
+  EpubChapter? selectedChapter;
+
+  InAppWebViewController? webViewController;
+  bool isToolbarVisible = false; // Control toolbar visibility
+  double toolbarX = 0.0; // X-coordinate for the toolbar
+  double toolbarY = 0.0; // Y-coordinate for the toolbar
+
+  @override
+  void initState() {
+    super.initState();
+    selectedChapter = widget.epubBook.Chapters!.firstWhere(
+      (chapter) => chapter.Anchor == widget.selectedChapterId,
+      orElse: () => widget.epubBook.Chapters!.first,
+    );
+  }
+
+  void handleTextSelection(String? value, double x, double y) {
+    if (value != null) {
+      setState(() {
+        selectedText = value;
+        isToolbarVisible = true;
+        toolbarX = x;
+        toolbarY = y;
+      });
+    }
+  }
+
+  TextSelectionToolbars _textSelectionToolbars = TextSelectionToolbars(
+    onCopy: () {
+      // Handle copy action
+    },
+    onAddNotes: () {
+      // Handle add notes action
+    },
+    onBookmark: () {
+      // Handle bookmark action
+    },
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final javascript = '''
+      document.addEventListener("mouseup", function() {
+        const selectedText = window.getSelection().toString();
+        const rect = window.getSelection().getRangeAt(0).getBoundingClientRect();
+        const x = rect.left + window.scrollX;
+        const y = rect.top + window.scrollY;
+        window.flutter_inappwebview.callHandler("onTextSelection", selectedText, x, y);
+      });
+    ''';
+    return Stack(
+      children: [
+        InAppWebView(
+          initialData: InAppWebViewInitialData(
+            // data: widget.epubBook.Content!.HtmlContent, // Adjust this according to your HTML content
+            data: selectedChapter!.HtmlContent ?? '',
+            mimeType: 'text/html',
+          ),
+          initialOptions: InAppWebViewGroupOptions(
+            crossPlatform: InAppWebViewOptions(
+              javaScriptEnabled: true,
+            ),
+          ),
+          onWebViewCreated: (controller) {
+            webViewController = controller;
+            controller.addJavaScriptHandler(
+              handlerName: 'onTextSelection',
+              callback: (args) {
+                final text = args[0];
+                final x = args[1];
+                final y = args[2];
+                widget.onTextSelection(text, x, y);
+              },
+            );
+          },
+          onLoadStop: (controller, url) {
+            // Inject the JavaScript for text selection
+            controller.evaluateJavascript(source: javascript);
+          },
+          onScrollChanged: (controller, x, y) {
+            // Handle scroll changes
+          },
+        ),
+        // Show the toolbar when text is selected
+        if (isToolbarVisible)
+          Positioned(
+            left: toolbarX,
+            top: toolbarY,
+            child: _textSelectionToolbars,
+          ),
+      ],
+    );
+  }
+}
+
+/////////////////////////////////////////////
+text selection at wrong place, highlight applied
+import 'package:flutter/material.dart';
+import 'package:epubx/epubx.dart';
+import 'package:flutter_html/flutter_html.dart';
+import 'package:html/parser.dart' as parser;
+import 'package:html/dom.dart' as dom;
+
+import 'textselectionmanager.dart';
+
+class ReaderPage extends StatefulWidget {
+  final EpubBook epubBook;
+  final String selectedChapterId;
+  const ReaderPage({
+    Key? key,
+    required this.epubBook,
+    required this.selectedChapterId,
+  }) : super(key: key);
+
+  @override
+  _ReaderPageState createState() => _ReaderPageState();
+}
+
+class _ReaderPageState extends State<ReaderPage> {
+  final TextSelectionManager textSelectionManager = TextSelectionManager();
+  int selectedTextStartIndex = -1;
+  int selectedTextEndIndex = -1;
+  Offset _dragStartPosition = Offset.zero; //  track drag start position
+
+  // GestureDetector to handle text selection gestures
+  Widget _buildSelectableText(String htmlContent) {
+    // Apply highlighting to selected text in HTML content
+    final highlightedHtmlContent = _applyHighlight(htmlContent);
+    // Print text selection positions
+    print(
+        "Selection Start X in _buildSelectableText: ${textSelectionManager.selectionStartX}");
+    print(
+        "Selection Start Y in _buildSelectableText: ${textSelectionManager.selectionStartY}");
+    print(
+        "Selection End X in _buildSelectableText: ${textSelectionManager.selectionEndX}");
+    print(
+        "Selection End Y in _buildSelectableText: ${textSelectionManager.selectionEndY}");
+
+    return GestureDetector(
+      // Register long press start handler
+      onLongPressStart: (details) =>
+          _handleLongPressStart(details, highlightedHtmlContent),
+      // Register long press move update handler
+      onLongPressMoveUpdate: _handleLongPressMoveUpdate,
+      // Register long press end handler
+      onLongPressEnd: _handleLongPressEnd,
+      // Display HTML content and anchors for text selection
+      child: Stack(
+        children: [
+          Html(data: highlightedHtmlContent),
+          // Display the anchors only when text is selected
+          if (textSelectionManager.selectedText.isNotEmpty)
+            // Display the anchor on the left
+            Positioned(
+              // Adjust as needed
+              left: textSelectionManager.selectionStartX - 2.0,
+              top: textSelectionManager.selectionStartY,
+              child: Container(
+                width: 4.0, // Width of the vertical line anchor
+                // Height of the anchor line based on line height
+                height: _calculateLineHeight(
+                    textSelectionManager.selectionStartY, htmlContent),
+                color: Colors.blue, // Color of the anchor
+              ),
+            ),
+          if (textSelectionManager.selectedText.isNotEmpty)
+            // Display the anchor on the right
+            Positioned(
+              // Adjust as needed
+              left: textSelectionManager.selectionEndX - 2.0,
+              top: textSelectionManager.selectionStartY,
+              child: Container(
+                width: 4.0, // Width of the vertical line anchor
+                // Height of the anchor line based on line height
+                height: _calculateLineHeight(
+                    textSelectionManager.selectionStartY, htmlContent),
+                color: Colors.blue, // Color of the anchor
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // Calculate the height of a line of text at a given yOffset
+  double _calculateLineHeight(double yOffset, String htmlContent) {
+    final RenderBox renderBox = context.findRenderObject() as RenderBox;
+    final String sanitizedHtmlContent = _sanitizeHtmlContent(htmlContent);
+
+    final List<String> lines = sanitizedHtmlContent.split('\n');
+    double lineOffsetY = 0.0;
+    double lineHeight = 0.0;
+
+    for (final line in lines) {
+      final TextPainter textPainter = TextPainter(
+        text: TextSpan(text: line),
+        textDirection: TextDirection.ltr,
+      )..layout();
+
+      lineHeight = textPainter.height;
+
+      if (yOffset >= lineOffsetY && yOffset <= lineOffsetY + lineHeight) {
+        break;
+      }
+
+      lineOffsetY += lineHeight;
+    }
+
+    return lineHeight;
+  }
+
+  // Apply highlighting to selected text in HTML content
+  String _applyHighlight(String htmlContent) {
+    // Modify the highlight style as needed
+    const String highlightStyle = 'background-color: yellow;';
+    // Get the selected text
+    final String highlightedText =
+        '<span style="$highlightStyle">${textSelectionManager.selectedText}</span>';
+
+    final int startIndex =
+        htmlContent.indexOf(textSelectionManager.selectedText);
+
+    if (startIndex != -1) {
+      final int endIndex =
+          (startIndex + textSelectionManager.selectedText.length).toInt();
+
+      print("Start Index in _applyHighlight: $startIndex");
+      print("End Index in _applyHighlight: $endIndex");
+
+      final String modifiedHtmlContent = htmlContent.replaceRange(
+        startIndex,
+        endIndex,
+        highlightedText,
+      );
+
+      return modifiedHtmlContent;
+    } else {
+      // Handle the case when selected text is not found (e.g., empty space)
+      return htmlContent;
+    }
+  }
+
+  // Method to handle long press start
+  void _handleLongPressStart(
+      LongPressStartDetails details, String htmlContent) {
+    _dragStartPosition = details.localPosition;
+    final List<dynamic> result =
+        _findSelectedText(details.localPosition, htmlContent);
+    final String selectedText = result[0];
+    final int selectedTextStartIndex = result[1];
+
+    // Print selected text and start index
+    print("Selected Text in _handleLongPressStart: $selectedText");
+    print(
+        "Selected Text Start Index in _handleLongPressStart: $selectedTextStartIndex");
+
+    // Calculate the start position relative to the text
+    final RenderBox renderBox = context.findRenderObject() as RenderBox;
+    final Offset localOffset = renderBox.globalToLocal(details.globalPosition);
+
+    // Update the selection with the correct range of indices
+    textSelectionManager.updateSelection(
+      selectedText,
+      localOffset.dx,
+      localOffset.dy,
+      localOffset.dx,
+      localOffset.dy,
+      selectedTextStartIndex,
+      selectedTextStartIndex + selectedText.length - 1, // Adjust end index
+    );
+    // setState(() {});
+    print("Selected Textss: $selectedText");
+  }
+
+  // Find the selected text at a given local position
+  List<dynamic> _findSelectedText(Offset localPosition, String htmlContent) {
+    final RenderBox renderBox = context.findRenderObject() as RenderBox;
+    final double globalOffsetY = renderBox.localToGlobal(localPosition).dy;
+    final String sanitizedHtmlContent = _sanitizeHtmlContent(htmlContent);
+
+    final List<String> lines =
+        sanitizedHtmlContent.split('\n'); // Split the content into lines
+    final List<String> words = sanitizedHtmlContent.split(' ');
+    // final List<String> words = sanitizedHtmlContent
+    //     .split(RegExp(r'\s+|(?<=\w)(?=[.,;])|(?<=[.,;])(?=\w)'));
+    String selectedText = '';
+    double wordOffsetY = 0.0;
+
+    int selectedTextStartIndex = -1; // Initialize with an invalid index
+    int selectedTextEndIndex = -1; // Initialize with an invalid index
+    int wordIndex = 0;
+
+    double lineOffsetY = 0.0;
+    double lineHeight = 0.0;
+
+    // for (final word in words) {
+    //   try {
+    //     final TextPainter textPainter = TextPainter(
+    //       text: TextSpan(text: word),
+    //       textDirection: TextDirection.ltr,
+    //     )..layout();
+    for (final line in lines) {
+      try {
+        final TextPainter textPainter = TextPainter(
+          text: TextSpan(text: line),
+          textDirection: TextDirection.ltr,
+        )..layout();
+
+        lineHeight = textPainter.height;
+
+        // final double textHeight = textPainter.height;
+        // final double textGlobalOffsetY =
+        // renderBox.localToGlobal(Offset.zero).dy;
+        // print("Global Offset: $globalOffsetY, Text Offset: $textGlobalOffsetY");
+
+        // // Adjust the range check to consider the end of the text as well
+        // if (globalOffsetY >= textGlobalOffsetY &&
+        //     globalOffsetY <= textGlobalOffsetY + textHeight) {
+        // Check if the word's position is within the touch position range
+        // if (localPosition.dy >= wordOffsetY &&
+        //     localPosition.dy <= wordOffsetY + textHeight) {
+        if (localPosition.dy >= lineOffsetY &&
+            localPosition.dy <= lineOffsetY + lineHeight) {
+          // selectedText = word;
+          //   print("Selected Text: $selectedText");
+          // print(
+          //     "Global Offset: $globalOffsetY, Text Offset: $textGlobalOffsetY");
+
+          //   selectedTextStartIndex = wordIndex;
+          //   selectedTextEndIndex = wordIndex + word.length - 1;
+          final int startIndex = line.indexOf(selectedText);
+          final int endIndex = startIndex + selectedText.length - 1;
+          print(
+              "startIndex in _findSelectedText: $startIndex, endIndex in _findSelectedText: $endIndex");
+
+          if (startIndex != -1) {
+            selectedTextStartIndex = wordIndex + startIndex;
+            selectedTextEndIndex = wordIndex + endIndex;
+          }
+
+          break;
+        } else {
+          print('No text selected');
+        }
+        // wordOffsetY += textHeight; // Move to the next word's position
+        // wordIndex += word.length + 1; // Add 1 for the space between words
+        lineOffsetY += lineHeight;
+      } catch (e) {
+        print("Error in TextPainter: $e"); // Debug print
+      }
+    }
+    textSelectionManager.updateSelection(
+      selectedText,
+      localPosition.dx,
+      localPosition.dy,
+      localPosition.dx,
+      localPosition.dy,
+      selectedTextStartIndex,
+      selectedTextEndIndex,
+    );
+    // return selectedText;
+    // return [selectedText, wordIndex];
+    return [selectedText, selectedTextStartIndex, selectedTextEndIndex];
+  }
+
+  // Remove HTML tags from selected text
+  String _sanitizeHtmlContent(String htmlContent) {
+    // Remove the unwanted text
+    htmlContent = htmlContent.replaceAll('ang="enxml:lang="en>', '');
+
+    final document = parser.parse(htmlContent);
+    return _parseElement(document.body!);
+  }
+
+  // Parse HTML elements
+  String _parseElement(dom.Element element) {
+    if (element.nodeType == dom.Node.TEXT_NODE) {
+      return element.text;
+    }
+
+    final buffer = StringBuffer();
+    for (final node in element.nodes) {
+      if (node is dom.Element) {
+        buffer.write(_parseElement(node));
+      } else if (node is dom.Text) {
+        buffer.write(node.text);
+      }
+    }
+    return buffer.toString();
+  }
+
+  // Method to handle long press move update
+  void _handleLongPressMoveUpdate(LongPressMoveUpdateDetails details) {
+    final offset = details.localPosition;
+    // Print drag details
+    print("Drag Offset in _handleLongPressMoveUpdate: $offset");
+    // Update the end coordinates
+    textSelectionManager.selectionEndX = offset.dx;
+    textSelectionManager.selectionEndY = offset.dy;
+
+    // Calculate selected text range based on drag direction
+    final startIndex = _calculateWordIndex(_dragStartPosition);
+    final endIndex = _calculateWordIndex(offset);
+    // print("Start Index: $startIndex, End Index: $endIndex");
+
+    if (startIndex >= 0 && endIndex >= 0) {
+      // Check if the new selection size is valid (minimum one text)
+      if (startIndex <= endIndex) {
+        final String selectedText = _getSelectedTextRange(startIndex, endIndex);
+
+        // Update the selection with the correct range of indices
+        textSelectionManager.updateSelection(
+          selectedText,
+          _dragStartPosition.dx,
+          _dragStartPosition.dy,
+          offset.dx,
+          offset.dy,
+          startIndex,
+          endIndex,
+        );
+
+        setState(() {});
+      }
+    }
+
+    setState(() {});
+  }
+
+  // Calculate the index of the selected word at a given local position
+  int _calculateWordIndex(Offset localPosition) {
+    final RenderBox renderBox = context.findRenderObject() as RenderBox;
+    final String sanitizedHtmlContent = _sanitizeHtmlContent(
+      widget.epubBook.Chapters!
+          .firstWhere(
+            (chapter) => chapter.Anchor == widget.selectedChapterId,
+            // Provide a default chapter with empty HtmlContent
+            orElse: () => widget.epubBook.Chapters!.first,
+          )
+          .HtmlContent!,
+    );
+
+    final List<String> words = sanitizedHtmlContent.split(' ');
+    double wordOffsetY = 0.0;
+    int wordIndex = 0;
+
+    for (final word in words) {
+      final TextPainter textPainter = TextPainter(
+        text: TextSpan(text: word),
+        textDirection: TextDirection.ltr,
+      )..layout();
+
+      final double textHeight = textPainter.height;
+      final double textGlobalOffsetY = renderBox.localToGlobal(Offset.zero).dy;
+
+      if (localPosition.dy >= wordOffsetY &&
+          localPosition.dy <= wordOffsetY + textHeight) {
+        return wordIndex; // Return the index of the selected word
+      }
+
+      wordOffsetY += textHeight;
+      wordIndex += word.length + 1; // Add 1 for the space between words
+    }
+
+    return -1; // Invalid index if no word is found
+  }
+
+  // Get the selected text within a specified word index range
+  String _getSelectedTextRange(int startIndex, int endIndex) {
+    final EpubChapter selectedChapter = widget.epubBook.Chapters!.firstWhere(
+      (chapter) => chapter.Anchor == widget.selectedChapterId,
+      orElse: () => widget.epubBook.Chapters!.first,
+    );
+
+    final String selectedChapterHtml = selectedChapter.HtmlContent!;
+    final List<String> words = _stripHtmlTags(selectedChapterHtml).split(' ');
+    // final List<String> selectedWords = words.sublist(startIndex, endIndex + 1);
+
+    // final String selectedText = selectedWords.join(' ');
+    // return selectedText;
+
+    // Check if startIndex and endIndex are within valid range
+    if (startIndex >= 0 && endIndex >= startIndex && endIndex < words.length) {
+      final List<String> selectedWords =
+          words.sublist(startIndex, endIndex + 1);
+
+      final String selectedText = selectedWords.join(' ');
+      return selectedText;
+    } else {
+      // Handle the case where the indices are out of range
+      return '';
+    }
+  }
+
+  // Remove html tags from selected text
+  String _stripHtmlTags(String htmlContent) {
+    final RegExp htmlTagRegex = RegExp(r"<[^>]*>");
+    return htmlContent.replaceAll(htmlTagRegex, '');
+  }
+
+  // Method to handle long press end
+  void _handleLongPressEnd(LongPressEndDetails details) {
+    if (textSelectionManager.selectedText.isNotEmpty) {
+      // Show the text selection toolbar only when text is selected
+      print("Selected Text is: ${textSelectionManager.selectedText}");
+      // setState(() {});
+    } else {
+      // Clear the selection if no text is selected
+      textSelectionManager.clearSelection();
+      setState(() {});
+    }
+  }
+
+  //clear text selection on tap
+  void _handleTap(TapDownDetails details) {
+    if (textSelectionManager.selectedText.isNotEmpty) {
+      textSelectionManager.clearSelection();
+      setState(() {});
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    EpubChapter selectedChapter = widget.epubBook.Chapters!.firstWhere(
+      (chapter) => chapter.Anchor == widget.selectedChapterId,
+      orElse: () => widget.epubBook.Chapters!.first,
+    );
+
+    // Retrieve HTML content
+    final selectedChapterHtml = selectedChapter.HtmlContent;
+
+    return GestureDetector(
+      //on tap down also clears text selection
+      onTapDown: _handleTap, // Register tap handler
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(14.0),
+        child: Stack(
+          children: [
+            // Display the text content with text selection gestures
+            _buildSelectableText(selectedChapterHtml!),
+
+            // Display the text selection toolbar
+            if (textSelectionManager.selectedText.isNotEmpty)
+              Positioned(
+                left: textSelectionManager.selectionStartX,
+                top: textSelectionManager.selectionStartY,
+                child: Column(
+                  children: [
+                    TextSelectionToolbarManager(
+                      selectedText: textSelectionManager.selectedText,
+                      onCopy: () {
+                        // Implement copying selected text
+                        print('copy clicked');
+                      },
+                      onHighlight: () {
+                        // Implement highlighting selected text
+                      },
+                    ),
+                    const SizedBox(height: 4.0), // Adjust spacing as needed
+                    Row(
+                      children: [
+                        TextSelectionAnchor(
+                          lineHeight: _calculateLineHeight(
+                              textSelectionManager.selectionStartY,
+                              selectedChapterHtml!),
+                          offsetX: 0, // Set offsetX as needed
+                          offsetY: 0, // Set offsetY as needed
+                        ),
+                        TextSelectionAnchor(
+                          lineHeight: _calculateLineHeight(
+                              textSelectionManager.selectionStartY,
+                              selectedChapterHtml!),
+                          offsetX: 0, // Set offsetX as needed
+                          offsetY: 0, // Set offsetY as needed
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class TextSelectionAnchor extends StatelessWidget {
+  final double offsetX;
+  final double offsetY;
+  final double lineHeight;
+
+  const TextSelectionAnchor({
+    Key? key,
+    required this.offsetX,
+    required this.offsetY,
+    required this.lineHeight,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: offsetX,
+      top: offsetY,
+      child: Container(
+        width: 4.0,
+        height: lineHeight,
+        color: Colors.blue,
+      ),
+    );
+  }
+}

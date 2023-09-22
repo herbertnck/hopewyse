@@ -1,0 +1,53 @@
+note
+	Login and authentication pages have been commented to reduce 
+		frequent logins during app testing
+
+Errors to solve
+		login account error
+		//on death book causing an error when splitting the file after downlaod
+		save status when changing apps 
+		.epub2/3 files error
+	librarypage
+		reduce the isinlibrary, addtolibrary and removefromlibrary code
+		librarypage to display coverimages then text logic
+	splitepub
+		delete uniquefolder if book does not finish downloading
+		reference storage location paths
+		app crash when donloading book and no internet connection
+		download notification not shown(checkconn.dart)
+	bookdetails
+		align about and size in bookdetails page left		
+	home
+		error if book doesnt have image in homepage
+		drawerpage on homepage
+	readerpage
+		after pressing on toolbar icons they should dissapear
+	bookreaderpage
+		when i click outside the menu the menu list should dissapear		
+		appbar shhould disappear when reading book
+		menu to be displayed as a drawer
+		touch progressbar to navigate to location
+		highlight current chapter in menu
+		progressbar for chapter 1 is 0% because its index 0
+	notes
+		
+		
+	
+
+loginpage-> authservice-> home-> homepage ->bookdetails->library_books
+										  ->BookReaderPage->readerpage
+															->notes
+								 librarypage, 
+								 
+						
+home-> holds the homepage and librarypage
+homepage-> displays books from server
+librarypage-> displays books saved to library
+bookdetails-> displays book image and details
+splitepub->	downloads and reads the book if read button is pressed
+library_books-> adds and removes books from library
+librarypage-> displays books in library
+BookReaderPage-> allows user to interact with the epub document
+readerpage-> renders the epub document to the user
+notes-> displays notes taken by the user in the book
+location-> maintains the user location in the document

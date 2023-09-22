@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "456868758603",
+    "firebase_url": "https://hopewyse-69c83-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "hopewyse-69c83",
+    "storage_bucket": "hopewyse-69c83.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:456868758603:android:059f1d64d09eb75c64b9ce",
+        "android_client_info": {
+          "package_name": "com.olmec.hopewyse"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "456868758603-pa741aanqh5ecs2tc5384tjnra7e1nmr.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBvK0aFLvxDqYr2WsCXqgwGGYhGKvBwiLk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "456868758603-pa741aanqh5ecs2tc5384tjnra7e1nmr.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
