@@ -1,19 +1,35 @@
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:hopewyse/pages/authentication/authService.dart';
+
+import 'auth_service.dart';
 
 class LoginPage extends StatelessWidget {
   const LoginPage({Key? key}) : super(key: key);
-  // To Be Implemented: No internet connection error.
+  final bool isSigningIn = false;
+
+  Future<void> checkInternetAndSignIn(BuildContext context) async {
+    final connectivityResult = await Connectivity().checkConnectivity();
+    if (connectivityResult == ConnectivityResult.none) {
+      Fluttertoast.showToast(
+        msg: 'No internet connection',
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.black,
+        textColor: Colors.white,
+      );
+      return;
+    }
+
+    AuthService().signInWithGoogle(context);
+  }
 
   @override
   Widget build(BuildContext context) {
     final Size size = MediaQuery.of(context).size;
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: const Color.fromARGB(200, 58, 168, 193),
-      ),
       body: Container(
         width: size.width,
         height: size.height,
@@ -25,7 +41,7 @@ class LoginPage extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text("Welcome Back To ",
+            const Text("Welcome To",
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 35)),
             const SizedBox(
               height: 15,
@@ -41,21 +57,20 @@ class LoginPage extends StatelessWidget {
             ),
             GestureDetector(
               child: OutlinedButton.icon(
-                //borderSide: const BorderSide(color: Colors.black),
-                label: const Text(
-                  'Sign In With Google',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                ),
-                //style: const Padding(padding: EdgeInsets.symmetric(horizontal: 12)),
-                icon: const FaIcon(
-                  FontAwesomeIcons.google,
+                  //borderSide: const BorderSide(color: Colors.black),
+                  label: const Text(
+                    'Sign In With Google',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                  //style: const Padding(padding: EdgeInsets.symmetric(horizontal: 12)),
+                  icon: const FaIcon(
+                    FontAwesomeIcons.google,
 
-                  // color: Colors.orangeAccent,
-                ),
-                onPressed: () {
-                  AuthService().signInWithGoogle();
-                },
-              ),
+                    // color: Colors.orangeAccent,
+                  ),
+                  onPressed: () {
+                    checkInternetAndSignIn(context);
+                  }),
             )
           ],
         ),
