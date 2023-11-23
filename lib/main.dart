@@ -14,7 +14,7 @@ import 'pages/homepage/chatPages/store_config.dart';
 void main() async {
   // configure purchases
   // if (Platform.isIOS || Platform.isMacOS) {
-  //   StoreConfig(
+  //   StoreConfig(  
   //     store: Store.appStore,
   //     apiKey: appleApiKey,
   //   );
