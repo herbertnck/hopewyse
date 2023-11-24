@@ -18,7 +18,7 @@ void main() async {
   //     store: Store.appStore,
   //     apiKey: appleApiKey,
   //   );
-  // } else if (Platform.isAndroid) {
+  // } else if (Platform.isAndroid) { 
   // Run the app passing --dart-define=AMAZON=true
   const useAmazon = bool.fromEnvironment("amazon");
   StoreConfig(
