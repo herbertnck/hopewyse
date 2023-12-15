@@ -11,7 +11,7 @@ import 'libraryPages/library_check_add_rem.dart';
 import 'homePages/split_epub.dart';
 
 class BookDetails extends StatefulWidget {
-  final book;
+  final book; 
 
   const BookDetails({
     super.key,
