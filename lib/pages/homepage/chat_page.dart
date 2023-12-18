@@ -1,15 +1,16 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:dash_chat_2/dash_chat_2.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
+import 'chatPages/message_tracker.dart';
+import 'chatPages/obtain_api_key.dart';
+import 'chatPages/reply_counter.dart';
 import 'chatPages/subscriptions.dart';
 
 class ChatPage extends StatefulWidget {
@@ -28,50 +29,31 @@ class _ChatPageState extends State<ChatPage> {
   final List<ChatMessage> _messages = []; //List of chat messages
   // control the text in input field
   final TextEditingController _textController = TextEditingController();
-  String apiKey = '';
   int minLines = 1;
   bool _hasEntitlement = false; // Keep track if user has subscription
   // Define the current user (you)
   ChatUser currentUser = ChatUser(id: '1', firstName: 'User');
   ChatMessage? _selectedMessage; // Track the selected message
-  late bool selected;
-  // Create a message tracker instance
+  late bool selected; //Select message in chat
+  // Create message tracker instance
   final MessageTracker messageTracker = MessageTracker();
+  //Obtain APiKey and Prompt
+  final ObtainApiKeyPrompt obtainApiKeyPrompt = ObtainApiKeyPrompt();
+  late ReplyCounter _replyCounter; // Initialize ReplyCounter instance
 
   @override
   void initState() {
     super.initState();
-    _loadApiKey();
     _initializeRevenueCat();
+    obtainApiKeyPrompt.loadApiKey();
+    obtainApiKeyPrompt.loadPrompt();
     _loadSavedChats();
+    _replyCounter = ReplyCounter(); // Initialize the ReplyCounter
   }
 
-  Future<void> _loadApiKey() async {
-    try {
-      final DocumentSnapshot<Map<String, dynamic>> documentSnapshot =
-          await FirebaseFirestore.instance
-              .collection('ApiKey')
-              .doc('apiKey')
-              .get();
-
-      if (documentSnapshot.exists) {
-        final apiKeyValue = documentSnapshot.data()?['apiKey'];
-        // print('apikey is: $apiKeyValue');
-        if (apiKeyValue != null) {
-          setState(() {
-            apiKey = apiKeyValue;
-          });
-        }
-      }
-    } catch (e) {
-      // Handle any errors when accessiong Firestore
-      print('Error loading Api Key: $e');
-    }
-  }
-
+  // check if the user has a valid entitlement
   void _initializeRevenueCat() async {
     try {
-      // check if the user has a valid entitlement
       await RevenueCatManager.initializeRevenueCat();
       final hasEntitlement = await RevenueCatManager.checkEntitlement();
 
@@ -89,6 +71,7 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+  //Load saved chats from storage
   Future<void> _loadSavedChats() async {
     final directory = await getApplicationDocumentsDirectory();
     final file = File('${directory.path}/chat_messages.json');
@@ -108,6 +91,7 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+  // Save chats to storage
   Future<void> _saveChatsToStorage(List<ChatMessage> messages) async {
     final directory = await getApplicationDocumentsDirectory();
     final file = File('${directory.path}/chat_messages.json');
@@ -120,6 +104,7 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+  // handle long press message
   void _handleLongPressMessage(ChatMessage message) {
     // setState(() {
     //   _selectedMessage = message;
@@ -137,6 +122,7 @@ class _ChatPageState extends State<ChatPage> {
         Overlay.of(context)!.context.findRenderObject() as RenderBox;
   }
 
+  // Delete messages
   void _deleteMessage(ChatMessage message) {
     setState(() {
       _messages.remove(message);
@@ -144,6 +130,7 @@ class _ChatPageState extends State<ChatPage> {
     _saveChatsToStorage(_messages);
   }
 
+  // Handle menu item selected
   void _handleMenuItemSelected(String value) {
     if (_selectedMessage != null) {
       switch (value) {
@@ -305,9 +292,6 @@ class _ChatPageState extends State<ChatPage> {
         _textController.clear();
         _showUpsellScreen();
       }
-
-      // _textController.clear();
-      // _showUpsellScreen();
     }
   }
 
@@ -333,9 +317,16 @@ class _ChatPageState extends State<ChatPage> {
   // send message to chatgpt and get back reply
   Future<void> _simulateChatbotReply(String userMassage) async {
     String userMessage = userMassage;
-    print('User message is $userMessage');
+    // print('User message is $userMessage');
+
+    // Innitialize the prompt and api keys
+    String myPrompt = obtainApiKeyPrompt.prompt;
+    String apiKey = obtainApiKeyPrompt.apiKey;
+    // print('my prompt is $myPrompt');
+    // print('my api key is $apiKey');
     // OpenAI api connection
     try {
+      // String myPrompt = "Your name is Sage. You are Sage";
       final response = await http.post(
           Uri.parse('https://api.openai.com/v1/chat/completions'),
           headers: {
@@ -347,19 +338,33 @@ class _ChatPageState extends State<ChatPage> {
             // 'usage': ['total_tokens': '100'],
             // 'maxToken': '200',
             'messages': [
-              {'role': 'system', 'content': 'Your name is Sage.You are Sage.'},
-              {
-                'role': 'system',
-                'content':
-                    'You are a Seventh Day Adventist spiritual assistant. Your purpose is to help the user gain spiritual knowledge and wisdom. Only provide messages which uphold the Seventh Day Adventist christian values.You are well-versed in various aspects of spirituality, meditation, and self-discovery. You provide guidance, answer questions, and offer insights to assist users on their spiritual journey. Your primary goal is to create a supportive and enlightening experience for users. Dont make your answers too long. You maintain a calm and compassionate demeanor throughout interactions. you will help users study the bible, provide Guidance on Meditation, understand spirituality, understand Life Purpose, provide Emotional Healing and Inner Self-Discovery and help with personal Growth among others.'
-              },
-              {
-                'role': 'user',
-                'content':
-                    'If the user asks what you have for him for the day please provide concrate message for the user which can be a verse or motivation or facts'
-              },
+              {'role': 'system', 'content': myPrompt},
+              // {'role': 'system', 'content': 'Your name is Sage. You are Sage.'},
+              // {
+              //   'role': 'system',
+              //   'content':
+              //       "You are a Seventh Day Adventist spiritual assistant. Your purpose is to help the user gain spiritual knowledge and wisdom. Only provide messages which uphold the Seventh Day Adventist christian values.You are well-versed in various aspects of spirituality, meditation, and self-discovery. You provide guidance, answer questions, and offer insights to assist users on their spiritual journey. Your primary goal is to create a supportive and enlightening experience for users. Dont make your answers too long. You maintain a calm and compassionate demeanor throughout interactions. you will help users study the bible, provide Guidance on Meditation, understand spirituality, understand Life Purpose, provide Emotional Healing and Inner Self-Discovery and help with personal Growth among others."
+              // },
+              // {
+              //   'role': 'system',
+              //   'content':
+              //       'If the user asks what you have for him for the day please provide concrate message for the user which can be a verse or motivation or bible facts'
+              // },
+              // {
+              //   'role': 'system',
+              //   'content':
+              //       'When explaining a Bible verse include other verses relevant to the verse at the end. At the end of each reply, you will also provide 3 questions relevant to the verse and ask the user to reply with a number to continue with the conversation. If the user replies with a number, you will identify the question represented by the number and reply to it in the next response. Do not ask reflective questions that seek personal experiences. Follow “The Art of Prophesying" by William Perkins book as a guideline when preparing sermons'
+              // },
               {'role': 'user', 'content': userMessage},
-            ]
+            ],
+
+            // 'stream': 'true',
+
+            // 'usage': [
+            //   {'prompt_tokens': 0},
+            //   {'completion_tokens': 12},
+            //   {'total_tokens': 21},
+            // ]
           }));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -378,7 +383,11 @@ class _ChatPageState extends State<ChatPage> {
 
           setState(() {
             _messages.insert(0, botMessage); // Add the bot's response to  chat
-            _saveChatsToStorage(_messages);
+            _replyCounter.incrementReplyCount(); // Increment reply count
+            // int currentReplyCount = _replyCounter.getReplyCount() as int;
+            // print('Total replies received: $currentReplyCount');
+            _replyCounter.saveReplyCount(); // Save the updated reply count
+            _saveChatsToStorage(_messages); // Save message to storage
           });
         });
       } else {
@@ -392,6 +401,7 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+  // Show network error toast
   void _showNetworkErrorToast() {
     Fluttertoast.showToast(
       msg: "Connection error",
@@ -402,14 +412,15 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
+  // Dispose text input after pressing send button
   @override
   void dispose() {
     _textController.dispose();
     super.dispose();
   }
 
+  // Show the upsell screen in a bottom sheet
   void _showUpsellScreen() {
-    // Show the upsell screen in a bottom sheet
     showModalBottomSheet(
       context: context,
       builder: (context) {
@@ -420,92 +431,5 @@ class _ChatPageState extends State<ChatPage> {
         );
       },
     );
-  }
-}
-
-class MessageTracker {
-  int _messageCount = 0; // No of messages sent by user
-  DateTime? _lastMessageTime; //TIme of last message sent
-
-  // SharedPreferences keys
-  static const String _messageCountKey = 'message_count';
-  static const String _lastMessageTimeKey = 'last_message_time';
-
-  // Initialize the tracker
-  MessageTracker() {
-    _loadMessageCount();
-    _loadLastMessageTime();
-  }
-
-  // Load messagecount from storage
-  Future<void> _loadMessageCount() async {
-    final prefs = await SharedPreferences.getInstance();
-    _messageCount = prefs.getInt(_messageCountKey) ?? 0;
-    print('message count from load $_messageCount');
-  }
-
-  // Load last message time from storage
-  Future<void> _loadLastMessageTime() async {
-    final prefs = await SharedPreferences.getInstance();
-    final timeInMillis = prefs.getInt(_lastMessageTimeKey);
-    if (timeInMillis != null) {
-      _lastMessageTime = DateTime.fromMillisecondsSinceEpoch(timeInMillis);
-    }
-    print('Last message time loaded: $_lastMessageTime');
-  }
-
-  // save messagecount and last message time to storage
-  Future<void> _saveMessageCount() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_messageCountKey, _messageCount);
-    print('message count saved is  $_messageCount');
-
-    if (_lastMessageTime != null) {
-      final timeInMillis = _lastMessageTime!.millisecondsSinceEpoch;
-      await prefs.setInt(_lastMessageTimeKey, timeInMillis);
-      print('Last message time saved: $_lastMessageTime');
-    }
-  }
-
-  //Calculate remaining message count for the user
-  int getRemainingMessageCount() {
-    //Implement logic to reset message count if needed
-    _resetMessageCountIfNecessary();
-    print('remaining messagecount is : ${3 - _messageCount}');
-    return 3 - _messageCount;
-  }
-
-  //INcrement message count when a message is sent
-  void incrementMessageCount() {
-    _messageCount++;
-    _saveMessageCount(); // Save the updated message count
-    //Update the last message time
-    _lastMessageTime = DateTime.now();
-  }
-
-  // Check if the user has exceeded message limit
-  bool isMessageLimitExceeded() {
-    // returns true if the remaining count is less than or equal to 0.
-    return getRemainingMessageCount() <= 0;
-  }
-
-  //Check if the message count needs to be reset
-  void _resetMessageCountIfNecessary() {
-    print('_resetMessageCountIfNecessary');
-    print('last message time $_lastMessageTime');
-    if (_lastMessageTime != null) {
-      final currentTime = DateTime.now();
-      final timeDifference = currentTime.difference(_lastMessageTime!);
-      print('Time difference is $timeDifference');
-      if (timeDifference.inHours >= 24) {
-        _messageCount = 0;
-        _lastMessageTime = null;
-        _saveMessageCount();
-      }
-    } else {
-      _messageCount = 0;
-      _saveMessageCount();
-    }
-    print('message count is now $_messageCount');
   }
 }
