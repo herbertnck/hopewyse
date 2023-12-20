@@ -31,7 +31,7 @@ class _ChatPageState extends State<ChatPage> {
   final TextEditingController _textController = TextEditingController();
   int minLines = 1;
   bool _hasEntitlement = false; // Keep track if user has subscription
-  // Define the current user (you)
+  // Define the current user (you) 
   ChatUser currentUser = ChatUser(id: '1', firstName: 'User');
   ChatMessage? _selectedMessage; // Track the selected message
   late bool selected; //Select message in chat
