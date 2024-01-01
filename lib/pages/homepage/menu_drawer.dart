@@ -8,7 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:mailto/mailto.dart';
 
 import '../authentication/auth_service.dart';
-import 'chatPages/reply_counter.dart';
+import 'chatPages/rank_reply_counter.dart';
 import 'settings_page.dart';
 
 class MenuDrawer extends StatelessWidget {
@@ -66,13 +66,19 @@ class MenuDrawer extends StatelessWidget {
           ),
         ),
 
-        // //Drawer List view
+        // Card to display number of points and rank
+        PointsCard(replyCounter: replyCounter),
+        // const Divider(),
+
+        const Expanded(child: SizedBox()),
+
+        // Settings
         ListTile(
           leading: const Icon(Icons.settings),
           title: const Text(
             'Settings',
             style: TextStyle(
-              fontSize: 20.0,
+              fontSize: 16.0,
             ),
           ),
           onTap: () {
@@ -81,19 +87,13 @@ class MenuDrawer extends StatelessWidget {
           },
         ),
 
-        // const Divider(),
-
-        // Card to display number of points and rank
-        PointsCard(replyCounter: replyCounter),
-
-        const Expanded(child: SizedBox()),
         // Logout button
         ListTile(
           leading: const Icon(Icons.logout),
           title: const Text(
             "Logout",
             style: TextStyle(
-              fontSize: 15.0,
+              fontSize: 16.0,
             ),
           ),
           onTap: () {
@@ -137,7 +137,7 @@ class PointsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
+      margin: const EdgeInsets.only(left: 10, right: 10, bottom: 10),
       child: FutureBuilder<int>(
         future: replyCounter.getReplyCount(), // Use the future directly
         builder: (context, snapshot) {
