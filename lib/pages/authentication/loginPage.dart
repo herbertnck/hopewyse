@@ -11,7 +11,7 @@ class LoginPage extends StatelessWidget {
 
   Future<void> checkInternetAndSignIn(BuildContext context) async {
     final connectivityResult = await Connectivity().checkConnectivity();
-    if (connectivityResult == ConnectivityResult.none) {
+    if (connectivityResult == ConnectivityResult.none) { 
       Fluttertoast.showToast(
         msg: 'No internet connection',
         toastLength: Toast.LENGTH_SHORT,
