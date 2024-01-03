@@ -2,19 +2,21 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:fluttertoast/fluttertoast.dart';
-import 'package:dash_chat_2/dash_chat_2.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-import 'chatPages/message_tracker.dart';
+import 'package:chatview/chatview.dart';
+import 'chatPages/models/theme.dart';
+
+import 'chatPages/reset_message_tracker.dart';
 import 'chatPages/obtain_api_key.dart';
-import 'chatPages/reply_counter.dart';
+import 'chatPages/rank_reply_counter.dart';
 import 'chatPages/subscriptions.dart';
 
 class ChatPage extends StatefulWidget {
-  const ChatPage({Key? key}) : super(key: key);
+  const ChatPage({super.key});
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -26,20 +28,41 @@ class ChatPage extends StatefulWidget {
 }
 
 class _ChatPageState extends State<ChatPage> {
-  final List<ChatMessage> _messages = []; //List of chat messages
+  // final List<ChatMessage> _messages = []; //List of chat messages
   // control the text in input field
   final TextEditingController _textController = TextEditingController();
   int minLines = 1;
   bool _hasEntitlement = false; // Keep track if user has subscription
-  // Define the current user (you) 
-  ChatUser currentUser = ChatUser(id: '1', firstName: 'User');
-  ChatMessage? _selectedMessage; // Track the selected message
+  // Define the current user (you)
+  final currentUser = ChatUser(id: '1', name: 'User');
+  final sageUser = ChatUser(id: '2', name: 'Sage');
+  // ChatMessage? _selectedMessage; // Track the selected message
   late bool selected; //Select message in chat
   // Create message tracker instance
   final MessageTracker messageTracker = MessageTracker();
   //Obtain APiKey and Prompt
   final ObtainApiKeyPrompt obtainApiKeyPrompt = ObtainApiKeyPrompt();
   late ReplyCounter _replyCounter; // Initialize ReplyCounter instance
+  late String _selectedBibleType;
+
+  // late ChatController _chatController;
+  AppTheme theme = LightTheme();
+  bool isDarkTheme = false;
+  List<Message> messageList = [
+    Message(
+      id: '1',
+      message: "Hi",
+      createdAt: DateTime.now(),
+      sendBy: '1',
+    ),
+    Message(
+      id: '2',
+      message: "Hello",
+      createdAt: DateTime.now(),
+      sendBy: '2',
+    ),
+  ];
+  late final _chatController;
 
   @override
   void initState() {
@@ -47,8 +70,33 @@ class _ChatPageState extends State<ChatPage> {
     _initializeRevenueCat();
     obtainApiKeyPrompt.loadApiKey();
     obtainApiKeyPrompt.loadPrompt();
-    _loadSavedChats();
+    // _loadSavedChats();
     _replyCounter = ReplyCounter(); // Initialize the ReplyCounter
+    // _selectedBibleType = ''; // Initialize _selectedBibleType here
+    _getSelectedBibleType();
+
+    messageList = []; // Initialize messageList here
+    _chatController = ChatController(
+      // initialMessageList: _messages, // _messages is the list of ChatMessages
+      initialMessageList: messageList, // _messages is the list of ChatMessages
+      scrollController: ScrollController(),
+      chatUsers: [
+        ChatUser(
+          id: '2',
+          name: 'Sage',
+          // profilePhoto: Data.profileImage,
+        ),
+      ], // List of ChatUsers
+    );
+
+    // if (_messages.isEmpty) {
+    //   // Send initial message when chat is empty
+    //   _simulateChatbotReply("How to use Sage chat");
+    // }
+  }
+
+  void _showHideTypingIndicator() {
+    _chatController.setTypingIndicator = !_chatController.showTypingIndicator;
   }
 
   // check if the user has a valid entitlement
@@ -71,164 +119,405 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-  //Load saved chats from storage
-  Future<void> _loadSavedChats() async {
-    final directory = await getApplicationDocumentsDirectory();
-    final file = File('${directory.path}/chat_messages.json');
+  // //Load saved chats from storage
+  // Future<void> _loadSavedChats() async {
+  //   final directory = await getApplicationDocumentsDirectory();
+  //   final file = File('${directory.path}/chat_messages.json');
 
-    try {
-      if (await file.exists()) {
-        final jsonContents = await file.readAsString();
-        final chatMessages = (json.decode(jsonContents) as List)
-            .map((messageJson) => ChatMessage.fromJson(messageJson))
-            .toList();
-        setState(() {
-          _messages.addAll(chatMessages);
-        });
-      }
-    } catch (e) {
-      print('Error loading chat messages: $e');
-    }
-  }
+  //   try {
+  //     if (await file.exists()) {
+  //       final jsonContents = await file.readAsString();
+  //       final chatMessages = (json.decode(jsonContents) as List)
+  //           .map((messageJson) => ChatMessage.fromJson(messageJson))
+  //           .toList();
+  //       setState(() {
+  //         _messages.addAll(chatMessages);
+  //       });
+  //     }
+  //   } catch (e) {
+  //     print('Error loading chat messages: $e');
+  //   }
+  // }
 
   // Save chats to storage
-  Future<void> _saveChatsToStorage(List<ChatMessage> messages) async {
+  Future<void> _saveChatsToStorage(List messages) async {
     final directory = await getApplicationDocumentsDirectory();
     final file = File('${directory.path}/chat_messages.json');
 
     try {
-      final jsonMessages = messages.map((message) => message.toJson()).toList();
+      // await file.writeAsString(''); // Clear previous messages
+
+      // final jsonMessages = messages.map((message) => message.toJson()).toList();
+      // await file.writeAsString(jsonEncode(jsonMessages));
+      final List jsonMessages = messages.map((message) {
+        return message.toJson();
+      }).toList();
+
+      // Convert DateTime objects to ISO 8601 strings
+      for (var jsonMessage in jsonMessages) {
+        if (jsonMessage['createdAt'] is DateTime) {
+          jsonMessage['createdAt'] =
+              (jsonMessage['createdAt'] as DateTime).toIso8601String();
+        }
+      }
       await file.writeAsString(jsonEncode(jsonMessages));
     } catch (e) {
       print('Error saving chat messages: $e');
     }
   }
 
-  // handle long press message
-  void _handleLongPressMessage(ChatMessage message) {
-    // setState(() {
-    //   _selectedMessage = message;
-    // });
+  // Method to retrieve the selected Bible type
+  Future<void> _getSelectedBibleType() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
     setState(() {
-      if (_selectedMessage == message) {
-        // Deselect the message if it was already selected
-        _selectedMessage = null;
-      } else {
-        // Select the message
-        _selectedMessage = message;
-      }
+      _selectedBibleType = prefs.getString('selectedBibleType') ?? 'Default';
     });
-    final RenderBox overlay =
-        Overlay.of(context)!.context.findRenderObject() as RenderBox;
   }
 
-  // Delete messages
-  void _deleteMessage(ChatMessage message) {
-    setState(() {
-      _messages.remove(message);
-    });
-    _saveChatsToStorage(_messages);
-  }
+  // // handle long press message
+  // void _handleLongPressMessage( message) {
+  //   // setState(() {
+  //   //   _selectedMessage = message;
+  //   // });
+  //   setState(() {
+  //     if (_selectedMessage == message) {
+  //       // Deselect the message if it was already selected
+  //       _selectedMessage = null;
+  //     } else {
+  //       // Select the message
+  //       _selectedMessage = message;
+  //     }
+  //   });
+  //   final RenderBox overlay =
+  //       Overlay.of(context)!.context.findRenderObject() as RenderBox;
+  // }
 
-  // Handle menu item selected
-  void _handleMenuItemSelected(String value) {
-    if (_selectedMessage != null) {
-      switch (value) {
-        case 'share':
-          // Handle share action
-          // Implement the share logic here
-          break;
-        case 'delete':
-          // Handle delete action
-          _deleteMessage(_selectedMessage!);
-          break;
-        case 'copy':
-          // Handle copy action
-          Clipboard.setData(ClipboardData(text: _selectedMessage!.text));
-          break;
-      }
-      setState(() {
-        _selectedMessage = null; // Clear the selected message
-      });
-    }
-  }
+  // // Delete messages
+  // void _deleteMessage( message) {
+  //   setState(() {
+  //     _messages.remove(message);
+  //   });
+  //   _saveChatsToStorage(_messages);
+  // }
+
+  // // Handle menu item selected
+  // void _handleMenuItemSelected(String value) {
+  //   if (_selectedMessage != null) {
+  //     switch (value) {
+  //       case 'share':
+  //         // Handle share action
+  //         // Implement the share logic here
+  //         break;
+  //       case 'delete':
+  //         // Handle delete action
+  //         _deleteMessage(_selectedMessage!);
+  //         break;
+  //       case 'copy':
+  //         // Handle copy action
+  //         Clipboard.setData(ClipboardData(text: _selectedMessage!.text));
+  //         break;
+  //     }
+  //     setState(() {
+  //       _selectedMessage = null; // Clear the selected message
+  //     });
+  //   }
+  // }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Center(child: Text('Chat with Sage')),
+        title: const Center(
+            child: Text(
+          'Chat with Sage',
+          style: TextStyle(
+            // color: theme.appBarTitleTextStyle,
+            fontWeight: FontWeight.bold,
+            fontSize: 19,
+            letterSpacing: 0.25,
+          ),
+        )),
         backgroundColor: const Color.fromARGB(200, 58, 168, 193),
-        actions: _selectedMessage != null
-            ? [
-                PopupMenuButton<String>(
-                  onSelected: _handleMenuItemSelected,
-                  itemBuilder: (context) => [
-                    const PopupMenuItem<String>(
-                      value: 'share',
-                      child: Row(
-                        children: [
-                          // Icon(Icons.share),
-                          // SizedBox(width: 8), // Add some spacing
-                          Text('Share'),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuItem<String>(
-                      value: 'delete',
-                      child: Row(
-                        children: [
-                          // Icon(Icons.delete),
-                          // SizedBox(width: 8), // Add some spacing
-                          Text('Delete'),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuItem<String>(
-                      value: 'copy',
-                      child: Row(
-                        children: [
-                          // Icon(Icons.content_copy),
-                          // SizedBox(width: 8), // Add some spacing
-                          Text('Copy'),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ]
-            : null, // Hide the menu when no message is selected
+        // actions: _selectedMessage != null
+        // ? [
+        //     PopupMenuButton<String>(
+        //       onSelected: _handleMenuItemSelected,
+        //       itemBuilder: (context) => [
+        //         const PopupMenuItem<String>(
+        //           value: 'share',
+        //           child: Row(
+        //             children: [
+        //               // Icon(Icons.share),
+        //               // SizedBox(width: 8), // Add some spacing
+        //               Text('Share'),
+        //             ],
+        //           ),
+        //         ),
+        //         const PopupMenuItem<String>(
+        //           value: 'delete',
+        //           child: Row(
+        //             children: [
+        //               // Icon(Icons.delete),
+        //               // SizedBox(width: 8), // Add some spacing
+        //               Text('Delete'),
+        //             ],
+        //           ),
+        //         ),
+        //         const PopupMenuItem<String>(
+        //           value: 'copy',
+        //           child: Row(
+        //             children: [
+        //               // Icon(Icons.content_copy),
+        //               // SizedBox(width: 8), // Add some spacing
+        //               Text('Copy'),
+        //             ],
+        //           ),
+        //         ),
+        //       ],
+        //     ),
+        //   ]
+        // : null, // Hide the menu when no message is selected
       ),
       body: Column(
         children: [
           // Chat messages display using DashChat
           Expanded(
-            child: DashChat(
+            child:
+                // DashChat(
+                //   currentUser: currentUser,
+                //   onSend: _handleSubmitted,
+                //   messages: _messages,
+                //   messageOptions: MessageOptions(
+                //     onLongPressMessage: _handleLongPressMessage,
+                //   ),
+                //   // messageListOptions: MessageListOptions(),
+                // ),
+                ChatView(
               currentUser: currentUser,
-              onSend: _handleSubmitted,
-              messages: _messages,
-
-              messageOptions: MessageOptions(
-                onLongPressMessage: _handleLongPressMessage,
-                // messageDecorationBuilder:
-                //     (message, previousMessage, nextMessage) {
-                //   // Pass the selected property to each message
-                //   // return message.copyWith(selected: _selectedMessage == message);
-                //   if (message.selected) {
-                //     return BoxDecoration(
-                //       color:
-                //           Colors.grey, // Change to your desired highlight color
-                //       borderRadius:
-                //           BorderRadius.circular(8), // Customize as needed
-                //     );
-                //   } else {
-                //     return BoxDecoration(
-                //         // Your default message decoration
-                //         );
-                //   }
-                // },
+              chatController: _chatController,
+              onSendTap: _onSendTap,
+              featureActiveConfig: const FeatureActiveConfig(
+                lastSeenAgoBuilderVisibility: true,
+                receiptsBuilderVisibility: true,
               ),
-              // messageListOptions: MessageListOptions(),
+              chatViewState: ChatViewState.hasMessages,
+              chatViewStateConfig: ChatViewStateConfiguration(
+                loadingWidgetConfig: ChatViewStateWidgetConfiguration(
+                  loadingIndicatorColor: theme.outgoingChatBubbleColor,
+                ),
+                onReloadButtonTap: () {},
+              ),
+              typeIndicatorConfig: TypeIndicatorConfiguration(
+                flashingCircleBrightColor: theme.flashingCircleBrightColor,
+                flashingCircleDarkColor: theme.flashingCircleDarkColor,
+              ),
+              // appBar: ChatViewAppBar(
+              //   elevation: theme.elevation,
+              //   // backGroundColor: theme.appBarColor,
+              //   backGroundColor: const Color.fromARGB(200, 58, 168, 193),
+              //   // profilePicture: Data.profileImage,
+              //   // backArrowColor: theme.backArrowColor,
+              //   chatTitle: "Chat with Sage",
+              //   chatTitleTextStyle: TextStyle(
+              //     color: theme.appBarTitleTextStyle,
+              //     fontWeight: FontWeight.bold,
+              //     fontSize: 19,
+              //     letterSpacing: 0.25,
+              //   ),
+              //   // userStatus: "online",
+              //   // userStatusTextStyle: const TextStyle(color: Colors.grey),
+              //   // actions: [
+              //   //   IconButton(
+              //   //     // onPressed: _onThemeIconTap,
+              //   //     onPressed: (() {}),
+              //   //     icon: Icon(
+              //   //       isDarkTheme
+              //   //           ? Icons.brightness_4_outlined
+              //   //           : Icons.dark_mode_outlined,
+              //   //       color: theme.themeIconColor,
+              //   //     ),
+              //   //   ),
+              //   //   IconButton(
+              //   //     tooltip: 'Toggle TypingIndicator',
+              //   //     onPressed: _showHideTypingIndicator,
+              //   //     icon: Icon(
+              //   //       Icons.keyboard,
+              //   //       color: theme.themeIconColor,
+              //   //     ),
+              //   //   ),
+              //   // ],
+              // ),
+              chatBackgroundConfig: ChatBackgroundConfiguration(
+                messageTimeIconColor: theme.messageTimeIconColor,
+                messageTimeTextStyle:
+                    TextStyle(color: theme.messageTimeTextColor),
+                defaultGroupSeparatorConfig: DefaultGroupSeparatorConfiguration(
+                  textStyle: TextStyle(
+                    color: theme.chatHeaderColor,
+                    fontSize: 17,
+                  ),
+                ),
+                backgroundColor: theme.backgroundColor,
+              ),
+              sendMessageConfig: SendMessageConfiguration(
+                imagePickerIconsConfig: ImagePickerIconsConfiguration(
+                  cameraIconColor: theme.cameraIconColor,
+                  galleryIconColor: theme.galleryIconColor,
+                ),
+                replyMessageColor: theme.replyMessageColor,
+                defaultSendButtonColor: theme.sendButtonColor,
+                replyDialogColor: theme.replyDialogColor,
+                replyTitleColor: theme.replyTitleColor,
+                textFieldBackgroundColor: theme.textFieldBackgroundColor,
+                closeIconColor: theme.closeIconColor,
+                textFieldConfig: TextFieldConfiguration(
+                  onMessageTyping: (status) {
+                    /// Do with status
+                    debugPrint(status.toString());
+                  },
+                  compositionThresholdTime: const Duration(seconds: 1),
+                  textStyle: TextStyle(color: theme.textFieldTextColor),
+                ),
+                micIconColor: theme.replyMicIconColor,
+                voiceRecordingConfiguration: VoiceRecordingConfiguration(
+                  backgroundColor: theme.waveformBackgroundColor,
+                  recorderIconColor: theme.recordIconColor,
+                  waveStyle: WaveStyle(
+                    showMiddleLine: false,
+                    waveColor: theme.waveColor ?? Colors.white,
+                    extendWaveform: true,
+                  ),
+                ),
+              ),
+              chatBubbleConfig: ChatBubbleConfiguration(
+                // Sender's message chat bubble
+                outgoingChatBubbleConfig: ChatBubble(
+                  linkPreviewConfig: LinkPreviewConfiguration(
+                    backgroundColor: theme.linkPreviewOutgoingChatColor,
+                    bodyStyle: theme.outgoingChatLinkBodyStyle,
+                    titleStyle: theme.outgoingChatLinkTitleStyle,
+                  ),
+                  receiptsWidgetConfig: const ReceiptsWidgetConfig(
+                      showReceiptsIn: ShowReceiptsIn.all),
+                  color: theme.outgoingChatBubbleColor,
+                ),
+                // Receiver's message chat bubble
+                inComingChatBubbleConfig: ChatBubble(
+                  linkPreviewConfig: LinkPreviewConfiguration(
+                    linkStyle: TextStyle(
+                      color: theme.inComingChatBubbleTextColor,
+                      decoration: TextDecoration.underline,
+                    ),
+                    backgroundColor: theme.linkPreviewIncomingChatColor,
+                    bodyStyle: theme.incomingChatLinkBodyStyle,
+                    titleStyle: theme.incomingChatLinkTitleStyle,
+                  ),
+                  textStyle:
+                      TextStyle(color: theme.inComingChatBubbleTextColor),
+                  onMessageRead: (message) {
+                    /// send your message reciepts to the other client
+                    debugPrint('Message Read');
+                  },
+                  senderNameTextStyle:
+                      TextStyle(color: theme.inComingChatBubbleTextColor),
+                  color: theme.inComingChatBubbleColor,
+                ),
+              ),
+              replyPopupConfig: ReplyPopupConfiguration(
+                  backgroundColor: theme.replyPopupColor,
+                  buttonTextStyle:
+                      TextStyle(color: theme.replyPopupButtonColor),
+                  topBorderColor: theme.replyPopupTopBorderColor,
+                  onUnsendTap: (message) {
+                    // message is 'Message' class instance
+                    // Your code goes here
+                  },
+                  onReplyTap: (message) {
+                    // message is 'Message' class instance
+                    // Your code goes here
+                  },
+                  onReportTap: () {
+                    // Your code goes here
+                  },
+                  onMoreTap: () {
+                    // Your code goes here
+                  }),
+              reactionPopupConfig: ReactionPopupConfiguration(
+                shadow: BoxShadow(
+                  color: isDarkTheme ? Colors.black54 : Colors.grey.shade400,
+                  blurRadius: 20,
+                ),
+                backgroundColor: theme.reactionPopupColor,
+              ),
+              messageConfig: MessageConfiguration(
+                messageReactionConfig: MessageReactionConfiguration(
+                  backgroundColor: theme.messageReactionBackGroundColor,
+                  borderColor: theme.messageReactionBackGroundColor,
+                  reactedUserCountTextStyle:
+                      TextStyle(color: theme.inComingChatBubbleTextColor),
+                  reactionCountTextStyle:
+                      TextStyle(color: theme.inComingChatBubbleTextColor),
+                  reactionsBottomSheetConfig: ReactionsBottomSheetConfiguration(
+                    backgroundColor: theme.backgroundColor,
+                    reactedUserTextStyle: TextStyle(
+                      color: theme.inComingChatBubbleTextColor,
+                    ),
+                    reactionWidgetDecoration: BoxDecoration(
+                      color: theme.inComingChatBubbleColor,
+                      boxShadow: [
+                        BoxShadow(
+                          color: isDarkTheme
+                              ? Colors.black12
+                              : Colors.grey.shade200,
+                          offset: const Offset(0, 20),
+                          blurRadius: 40,
+                        )
+                      ],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                imageMessageConfig: ImageMessageConfiguration(
+                  // onTap: () {},
+                  margin:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 15),
+                  shareIconConfig: ShareIconConfiguration(
+                      defaultIconBackgroundColor:
+                          theme.shareIconBackgroundColor,
+                      defaultIconColor: theme.shareIconColor,
+                      onPressed: ((p0) {
+                        // Your code goes here
+                      })),
+                ),
+              ),
+              profileCircleConfig: const ProfileCircleConfiguration(
+                  // profileImageUrl: Data.profileImage,
+                  ),
+              repliedMessageConfig: RepliedMessageConfiguration(
+                backgroundColor: theme.repliedMessageColor,
+                verticalBarColor: theme.verticalBarColor,
+                repliedMsgAutoScrollConfig: const RepliedMsgAutoScrollConfig(
+                  enableHighlightRepliedMsg: true,
+                  highlightColor: Color.fromARGB(255, 128, 168, 255),
+                  highlightScale: 1.1,
+                ),
+                textStyle: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.25,
+                ),
+                replyTitleTextStyle:
+                    TextStyle(color: theme.repliedTitleTextColor),
+              ),
+              swipeToReplyConfig: SwipeToReplyConfiguration(
+                replyIconColor: theme.swipeToReplyIconColor,
+                onLeftSwipe: (message, sendBy) {
+                  // Your code goes here
+                },
+                onRightSwipe: (message, sendBy) {
+                  // Your code goes here
+                },
+              ),
             ),
           ),
         ],
@@ -236,31 +525,37 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  // Handle sent message
-  void _handleSubmitted(ChatMessage message) {
-    // Clear text area on send
-    String messageText = _textController.text.trim();
-    // _textController.clear();
-
+  void _onSendTap(
+    String message, // Text message to be sent
+    ReplyMessage
+        replyMessage, // Information about a message to which the current message is a reply
+    MessageType messageType, // Type of message e.g text, image, audio
+  ) {
     if (_hasEntitlement) {
-      // _showUpsellScreen();
       // User has entitlement, send the message
       print('dont show upsell screen');
-      if (messageText.isNotEmpty) {
-        ChatMessage message = ChatMessage(
-          text: messageText,
-          user: currentUser,
-          createdAt: DateTime.now(),
-        );
-        _textController.clear();
-      }
-      setState(() {
-        _messages.insert(0, message); // Add the sent message to the chat
-        // Save the chat messages to the device storage
-        _saveChatsToStorage(_messages);
-      });
-      // Call _simulateChatbotReply with the user's message.
-      _simulateChatbotReply(message.text);
+
+      // final id = int.parse(messageList.last.id) + 1;   // Message id
+      // _chatController.addMessage(
+      //   Message(
+      //     // id: id.toString(),
+      //     createdAt: DateTime.now(),
+      //     message: message,
+      //     sendBy: currentUser.id,
+      //     replyMessage: replyMessage,
+      //     messageType: messageType,
+      //   ),
+      // );
+      final newMessage = Message(
+        // id: id.toString(),
+        createdAt: DateTime.now(),
+        message: message,
+        sendBy: currentUser.id,
+        replyMessage: replyMessage,
+        messageType: messageType,
+      );
+      _chatController.addMessage(newMessage);
+      _simulateChatbotReply(message);
     } else {
       // User doesn't have entitlement
       print('no entitlement free messages');
@@ -268,21 +563,23 @@ class _ChatPageState extends State<ChatPage> {
           messageTracker.getRemainingMessageCount() > 0) {
         // User has entitlement and hasn't exceeded the message limit
         // Send the message
-        if (messageText.isNotEmpty) {
-          ChatMessage message = ChatMessage(
-            text: messageText,
-            user: currentUser,
-            createdAt: DateTime.now(),
-          );
-          _textController.clear();
-        }
-        setState(() {
-          _messages.insert(0, message); // Add the sent message to the chat
-          // Save the chat messages to the device storage
-          _saveChatsToStorage(_messages);
-        });
+        final newMessage = Message(
+          // id: id.toString(),
+          createdAt: DateTime.now(),
+          message: message,
+          sendBy: currentUser.id,
+          replyMessage: replyMessage,
+          messageType: messageType,
+        );
+        _chatController.addMessage(newMessage);
+
+        // setState(() {
+        //   // _messages.insert(0, message); // Add the sent message to the chat
+        //   // Save the chat messages to the device storage
+        //   _saveChatsToStorage(_messages);
+        // });
         // Call _simulateChatbotReply with the user's message.
-        _simulateChatbotReply(message.text);
+        _simulateChatbotReply(message);
         //Increment message count
         messageTracker.incrementMessageCount();
       } else {
@@ -293,7 +590,88 @@ class _ChatPageState extends State<ChatPage> {
         _showUpsellScreen();
       }
     }
+    // // Setting Initial Message Status to Undelivered
+    // Future.delayed(const Duration(milliseconds: 300), () {
+    //   _chatController.initialMessageList.last.setStatus =
+    //       MessageStatus.undelivered;
+    // });
+    // // Setting Initial Message Status to Read
+    // Future.delayed(const Duration(seconds: 1), () {
+    //   _chatController.initialMessageList.last.setStatus = MessageStatus.read;
+    // });
   }
+
+  // void _onSendTap(
+  //     String message, ReplyMessage replyMessage, MessageType messageType) {
+  //   final message = Message(
+  //     id: '2',
+  //     message: "How are you",
+  //     createdAt: DateTime.now(),
+  //     sendBy: currentUser.id,
+  //     replyMessage: replyMessage,
+  //     messageType: messageType,
+  //   );
+  //   _chatController.addMessage(message);
+  // }
+
+  // Handle sent message
+  // void _handleSubmitted(ChatMessage message) {
+  //   // Clear text area on send
+  //   String messageText = _textController.text.trim();
+  //   // _textController.clear();
+
+  //   if (_hasEntitlement) {
+  //     // _showUpsellScreen();
+  //     // User has entitlement, send the message
+  //     print('dont show upsell screen');
+  //     if (messageText.isNotEmpty) {
+  //       ChatMessage message = ChatMessage(
+  //         text: messageText,
+  //         user: currentUser,
+  //         createdAt: DateTime.now(),
+  //       );
+  //       _textController.clear();
+  //     }
+  //     setState(() {
+  //       _messages.insert(0, message); // Add the sent message to the chat
+  //       // Save the chat messages to the device storage
+  //       _saveChatsToStorage(_messages);
+  //     });
+  //     // Call _simulateChatbotReply with the user's message.
+  //     _simulateChatbotReply(message.text);
+  //   } else {
+  //     // User doesn't have entitlement
+  //     print('no entitlement free messages');
+  //     if (!messageTracker.isMessageLimitExceeded() ||
+  //         messageTracker.getRemainingMessageCount() > 0) {
+  //       // User has entitlement and hasn't exceeded the message limit
+  //       // Send the message
+  //       if (messageText.isNotEmpty) {
+  //         ChatMessage message = ChatMessage(
+  //           text: messageText,
+  //           user: currentUser,
+  //           createdAt: DateTime.now(),
+  //         );
+  //         _textController.clear();
+  //       }
+  //       setState(() {
+  //         _messages.insert(0, message); // Add the sent message to the chat
+  //         // Save the chat messages to the device storage
+  //         _saveChatsToStorage(_messages);
+  //       });
+  //       // Call _simulateChatbotReply with the user's message.
+  //       _simulateChatbotReply(message.text);
+  //       //Increment message count
+  //       messageTracker.incrementMessageCount();
+  //     } else {
+  //       //  message limit is exceeded
+  //       print('no free messages show upsell screen');
+  //       _showPaywall();
+  //       _textController.clear();
+  //       _showUpsellScreen();
+  //     }
+  //   }
+  // }
 
   // Function to show the paywall
   void _showPaywall() {
@@ -303,18 +681,19 @@ class _ChatPageState extends State<ChatPage> {
       // user: currentUser,
       user: ChatUser(
         id: '2',
-        firstName: 'Sage', // Customize the bot's name as needed
+        name: 'Sage', // Customize the bot's name as needed
       ),
       createdAt: DateTime.now(),
     );
 
-    setState(() {
-      _messages.insert(0, paywallMessage);
-      // _saveChatsToStorage(_messages);
-    });
+    // setState(() {
+    //   _messages.insert(0, paywallMessage);
+    //   // _saveChatsToStorage(_messages);
+    // });
   }
 
   // send message to chatgpt and get back reply
+  // Response code Error 400 means error in the chat gpt configuration
   Future<void> _simulateChatbotReply(String userMassage) async {
     String userMessage = userMassage;
     // print('User message is $userMessage');
@@ -322,6 +701,7 @@ class _ChatPageState extends State<ChatPage> {
     // Innitialize the prompt and api keys
     String myPrompt = obtainApiKeyPrompt.prompt;
     String apiKey = obtainApiKeyPrompt.apiKey;
+    print('Selected bible type is $_selectedBibleType');
     // print('my prompt is $myPrompt');
     // print('my api key is $apiKey');
     // OpenAI api connection
@@ -339,6 +719,10 @@ class _ChatPageState extends State<ChatPage> {
             // 'maxToken': '200',
             'messages': [
               {'role': 'system', 'content': myPrompt},
+              {
+                'role': 'system',
+                'content': 'use $_selectedBibleType for your reply'
+              },
               // {'role': 'system', 'content': 'Your name is Sage. You are Sage.'},
               // {
               //   'role': 'system',
@@ -358,7 +742,7 @@ class _ChatPageState extends State<ChatPage> {
               {'role': 'user', 'content': userMessage},
             ],
 
-            // 'stream': 'true',
+            // 'stream': 'false',
 
             // 'usage': [
             //   {'prompt_tokens': 0},
@@ -372,22 +756,33 @@ class _ChatPageState extends State<ChatPage> {
 
         // // Add the chatbots reply to the chat
         Future.delayed(const Duration(seconds: 1), () {
-          ChatMessage botMessage = ChatMessage(
-            text: chatbotReply,
-            user: ChatUser(
-              id: '2',
-              firstName: 'Sage', // Customize the bot's name as needed
-            ),
+          // ChatMessage botMessage = ChatMessage(
+          //   text: chatbotReply,
+          //   user: ChatUser(
+          //     id: '2',
+          //     name: 'Sage', // Customize the bot's name as needed
+          //   ),
+          //   createdAt: DateTime.now(),
+          // );
+
+          final botMessage = Message(
+            message: chatbotReply,
+            sendBy: sageUser.id,
             createdAt: DateTime.now(),
+            // messageType: messageType,
           );
 
           setState(() {
-            _messages.insert(0, botMessage); // Add the bot's response to  chat
+            // _messages.insert(0, botMessage); // Add the bot's response to  chat
+            _chatController.addMessage(botMessage);
+            _chatController.initialMessageList.last.setStatus =
+                MessageStatus.read;
             _replyCounter.incrementReplyCount(); // Increment reply count
             // int currentReplyCount = _replyCounter.getReplyCount() as int;
             // print('Total replies received: $currentReplyCount');
             _replyCounter.saveReplyCount(); // Save the updated reply count
-            _saveChatsToStorage(_messages); // Save message to storage
+            // _saveChatsToStorage(_messages); // Save message to storage
+            _saveChatsToStorage(_chatController.initialMessageList);
           });
         });
       } else {
@@ -433,3 +828,25 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 }
+
+class ChatMessage {
+  final String text;
+  final ChatUser user;
+  final DateTime createdAt;
+
+  ChatMessage({
+    required this.text,
+    required this.user,
+    required this.createdAt,
+  });
+}
+
+// class ChatUser {
+//   final String id;
+//   final String name;
+
+//   ChatUser({
+//     required this.id,
+//     required this.name,
+//   });
+// }
