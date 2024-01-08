@@ -1,7 +1,7 @@
 # hopewyse
 
 # Suppport
-  Currently optimized for only android platforms. Some Ios functionality commented out
+ 
 
 # Keys
   Get your API Keys for constant.dart file
