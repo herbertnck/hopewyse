@@ -16,7 +16,7 @@ import 'chatPages/rank_reply_counter.dart';
 import 'chatPages/subscriptions.dart';
 
 class ChatPage extends StatefulWidget {
-  const ChatPage({super.key});
+  const ChatPage({super.key}); 
 
   @override
   State<ChatPage> createState() => _ChatPageState();
