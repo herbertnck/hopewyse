@@ -15,8 +15,43 @@ import 'chatPages/obtain_api_key.dart';
 import 'chatPages/rank_reply_counter.dart';
 import 'chatPages/subscriptions.dart';
 
+// class Message {
+//   final String message;
+//   final ChatUser user;
+//   final DateTime createdAt;
+//   final MessageType messageType; // Update the MessageType declaration
+
+//   Message({
+//     required this.message,
+//     required this.user,
+//     required this.createdAt,
+//     required this.messageType,
+//   });
+
+//   // Convert message to JSON
+//   Map<String, dynamic> toJson() {
+//     return {
+//       'message': message,
+//       'user': user.toJson(),
+//       'createdAt': createdAt.toIso8601String(),
+//       'messageType': messageType.toString(),
+//     };
+//   }
+
+//   //Create a message from JSON
+//   factory Message.fromJson(Map<String, dynamic> json) {
+//     return Message(
+//       message: json['message'],
+//       user: ChatUser.fromJson(json['user']),
+//       createdAt: DateTime.parse(json['createdAt']),
+//       messageType: MessageType.values
+//           .firstWhere((e) => e.toString() == json['messageType']),
+//     );
+//   }
+// }
+
 class ChatPage extends StatefulWidget {
-  const ChatPage({super.key}); 
+  const ChatPage({super.key});
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -28,10 +63,9 @@ class ChatPage extends StatefulWidget {
 }
 
 class _ChatPageState extends State<ChatPage> {
-  // final List<ChatMessage> _messages = []; //List of chat messages
+  final List<Message> _messages = []; //List of chat messages
   // control the text in input field
   final TextEditingController _textController = TextEditingController();
-  int minLines = 1;
   bool _hasEntitlement = false; // Keep track if user has subscription
   // Define the current user (you)
   final currentUser = ChatUser(id: '1', name: 'User');
@@ -48,20 +82,20 @@ class _ChatPageState extends State<ChatPage> {
   // late ChatController _chatController;
   AppTheme theme = LightTheme();
   bool isDarkTheme = false;
-  List<Message> messageList = [
-    Message(
-      id: '1',
-      message: "Hi",
-      createdAt: DateTime.now(),
-      sendBy: '1',
-    ),
-    Message(
-      id: '2',
-      message: "Hello",
-      createdAt: DateTime.now(),
-      sendBy: '2',
-    ),
-  ];
+  // List<Message> messageList = [
+  //   Message(
+  //     // id: '1',
+  //     message: "Hi",
+  //     createdAt: DateTime.now(),
+  //     sendBy: '1',
+  //   ),
+  //   Message(
+  //     // id: '2',
+  //     message: "Hello",
+  //     createdAt: DateTime.now(),
+  //     sendBy: '2',
+  //   ),
+  // ];
   late final _chatController;
 
   @override
@@ -70,29 +104,35 @@ class _ChatPageState extends State<ChatPage> {
     _initializeRevenueCat();
     obtainApiKeyPrompt.loadApiKey();
     obtainApiKeyPrompt.loadPrompt();
-    // _loadSavedChats();
+    _loadSavedChats();
     _replyCounter = ReplyCounter(); // Initialize the ReplyCounter
-    // _selectedBibleType = ''; // Initialize _selectedBibleType here
+    _selectedBibleType = ''; // Initialize _selectedBibleType here
     _getSelectedBibleType();
 
-    messageList = []; // Initialize messageList here
+    // messageList = []; // Initialize messageList here
+    // _chatController = ChatController(
+    //   // initialMessageList: _messages, // _messages is the list of ChatMessages
+    //   initialMessageList: messageList, // _messages is the list of ChatMessages
+    //   scrollController: ScrollController(),
+    //   chatUsers: [
+    //     ChatUser(
+    //       id: '2',
+    //       name: 'Sage',
+    //       // profilePhoto: Data.profileImage,
+    //     ),
+    //   ], // List of ChatUsers
+    // );
     _chatController = ChatController(
-      // initialMessageList: _messages, // _messages is the list of ChatMessages
-      initialMessageList: messageList, // _messages is the list of ChatMessages
       scrollController: ScrollController(),
-      chatUsers: [
-        ChatUser(
-          id: '2',
-          name: 'Sage',
-          // profilePhoto: Data.profileImage,
-        ),
-      ], // List of ChatUsers
+      chatUsers: [sageUser],
+      initialMessageList: _messages,
     );
 
-    // if (_messages.isEmpty) {
-    //   // Send initial message when chat is empty
-    //   _simulateChatbotReply("How to use Sage chat");
-    // }
+    // Send initial message when chat is empty
+    if (_messages.isEmpty) {
+      // if (messageList.isEmpty) {
+      _simulateChatbotReply("How to use Sage chat");
+    }
   }
 
   void _showHideTypingIndicator() {
@@ -119,40 +159,59 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-  // //Load saved chats from storage
-  // Future<void> _loadSavedChats() async {
-  //   final directory = await getApplicationDocumentsDirectory();
-  //   final file = File('${directory.path}/chat_messages.json');
-
-  //   try {
-  //     if (await file.exists()) {
-  //       final jsonContents = await file.readAsString();
-  //       final chatMessages = (json.decode(jsonContents) as List)
-  //           .map((messageJson) => ChatMessage.fromJson(messageJson))
-  //           .toList();
-  //       setState(() {
-  //         _messages.addAll(chatMessages);
-  //       });
-  //     }
-  //   } catch (e) {
-  //     print('Error loading chat messages: $e');
-  //   }
-  // }
-
-  // Save chats to storage
-  Future<void> _saveChatsToStorage(List messages) async {
+  //Load saved chats from storage
+  Future<void> _loadSavedChats() async {
     final directory = await getApplicationDocumentsDirectory();
     final file = File('${directory.path}/chat_messages.json');
 
     try {
-      // await file.writeAsString(''); // Clear previous messages
+      if (await file.exists()) {
+        final jsonContents = await file.readAsString();
+        // final chatMessages = (json.decode(jsonContents) as List)
+        //     .map((messageJson) => Message.fromJson(messageJson))
+        //     .toList();
+        // setState(() {
+        //   _messages.addAll(chatMessages);
+        //   // _chatController.initialMessageList = chatMessages.reversed.toList();
+        // });
+        if (jsonContents.isNotEmpty) {
+          final _messages = (json.decode(jsonContents) as List)
+              .map((messageJson) => Message.fromJson(messageJson))
+              .toList();
 
+          setState(() {
+            _messages.addAll(_messages);
+          });
+        } else {
+          _simulateChatbotReply("How to use Sage chat");
+        }
+      } else {
+        // Display initial message when chat is empty
+        _simulateChatbotReply("How to use Sage chat");
+      }
+    } catch (e) {
+      print('Error loading chat messages: $e');
+    }
+  }
+
+  // Save chats to storage
+  Future<void> _saveChatsToStorage(List<Message> messages) async {
+    final directory = await getApplicationDocumentsDirectory();
+    final file = File('${directory.path}/chat_messages.json');
+
+    try {
+      await file.writeAsString(''); // Clear previous messages
       // final jsonMessages = messages.map((message) => message.toJson()).toList();
       // await file.writeAsString(jsonEncode(jsonMessages));
-      final List jsonMessages = messages.map((message) {
+      final List<Map<String, dynamic>> jsonMessages = messages.map((message) {
         return message.toJson();
       }).toList();
 
+      // Convert MessageType enum to string representation
+      for (var jsonMessage in jsonMessages) {
+        jsonMessage['messageType'] =
+            messageTypeEnumToString(jsonMessage['messageType']);
+      }
       // Convert DateTime objects to ISO 8601 strings
       for (var jsonMessage in jsonMessages) {
         if (jsonMessage['createdAt'] is DateTime) {
@@ -161,8 +220,27 @@ class _ChatPageState extends State<ChatPage> {
         }
       }
       await file.writeAsString(jsonEncode(jsonMessages));
+      print('message saved successfully');
     } catch (e) {
       print('Error saving chat messages: $e');
+    }
+  }
+
+  // convert MessageType enum to string
+  String messageTypeEnumToString(MessageType messageType) {
+    switch (messageType) {
+      case MessageType.text:
+        return 'text';
+      case MessageType.image:
+        return 'image';
+      case MessageType.voice:
+        return 'voice';
+      case MessageType.custom:
+        return 'custom';
+      // case MessageType.null:
+      //   return 'null';
+      default:
+        return 'text';
     }
   }
 
@@ -490,9 +568,9 @@ class _ChatPageState extends State<ChatPage> {
                       })),
                 ),
               ),
-              profileCircleConfig: const ProfileCircleConfiguration(
-                  // profileImageUrl: Data.profileImage,
-                  ),
+              // profileCircleConfig: const ProfileCircleConfiguration(
+              //     // profileImageUrl: Data.profileImage,
+              //     ),
               repliedMessageConfig: RepliedMessageConfiguration(
                 backgroundColor: theme.repliedMessageColor,
                 verticalBarColor: theme.verticalBarColor,
@@ -528,24 +606,15 @@ class _ChatPageState extends State<ChatPage> {
   void _onSendTap(
     String message, // Text message to be sent
     ReplyMessage
-        replyMessage, // Information about a message to which the current message is a reply
+        replyMessage, //  message to which the current message is a reply
     MessageType messageType, // Type of message e.g text, image, audio
   ) {
     if (_hasEntitlement) {
       // User has entitlement, send the message
+      // _showUpsellScreen();
       print('dont show upsell screen');
 
       // final id = int.parse(messageList.last.id) + 1;   // Message id
-      // _chatController.addMessage(
-      //   Message(
-      //     // id: id.toString(),
-      //     createdAt: DateTime.now(),
-      //     message: message,
-      //     sendBy: currentUser.id,
-      //     replyMessage: replyMessage,
-      //     messageType: messageType,
-      //   ),
-      // );
       final newMessage = Message(
         // id: id.toString(),
         createdAt: DateTime.now(),
@@ -555,13 +624,18 @@ class _ChatPageState extends State<ChatPage> {
         messageType: messageType,
       );
       _chatController.addMessage(newMessage);
+      setState(() {
+        // Save the chat messages to the device storage
+        _saveChatsToStorage(_messages);
+        // _saveChatsToStorage(_chatController.initialMessageList);
+      });
       _simulateChatbotReply(message);
     } else {
       // User doesn't have entitlement
       print('no entitlement free messages');
       if (!messageTracker.isMessageLimitExceeded() ||
           messageTracker.getRemainingMessageCount() > 0) {
-        // User has entitlement and hasn't exceeded the message limit
+        // User hasn't exceeded the message limit
         // Send the message
         final newMessage = Message(
           // id: id.toString(),
@@ -573,11 +647,12 @@ class _ChatPageState extends State<ChatPage> {
         );
         _chatController.addMessage(newMessage);
 
-        // setState(() {
-        //   // _messages.insert(0, message); // Add the sent message to the chat
-        //   // Save the chat messages to the device storage
-        //   _saveChatsToStorage(_messages);
-        // });
+        setState(() { 
+          //   // _messages.insert(0, message); // Add sent message to the chat
+          // Save the chat messages to the device storage
+          _saveChatsToStorage(_messages);
+          // _saveChatsToStorage(_chatController.initialMessageList);
+        });
         // Call _simulateChatbotReply with the user's message.
         _simulateChatbotReply(message);
         //Increment message count
@@ -585,7 +660,7 @@ class _ChatPageState extends State<ChatPage> {
       } else {
         //  message limit is exceeded
         print('no free messages show upsell screen');
-        _showPaywall();
+        _showPaywall(message, replyMessage, messageType);
         _textController.clear();
         _showUpsellScreen();
       }
@@ -601,102 +676,35 @@ class _ChatPageState extends State<ChatPage> {
     // });
   }
 
-  // void _onSendTap(
-  //     String message, ReplyMessage replyMessage, MessageType messageType) {
-  //   final message = Message(
-  //     id: '2',
-  //     message: "How are you",
-  //     createdAt: DateTime.now(),
-  //     sendBy: currentUser.id,
-  //     replyMessage: replyMessage,
-  //     messageType: messageType,
-  //   );
-  //   _chatController.addMessage(message);
-  // }
-
-  // Handle sent message
-  // void _handleSubmitted(ChatMessage message) {
-  //   // Clear text area on send
-  //   String messageText = _textController.text.trim();
-  //   // _textController.clear();
-
-  //   if (_hasEntitlement) {
-  //     // _showUpsellScreen();
-  //     // User has entitlement, send the message
-  //     print('dont show upsell screen');
-  //     if (messageText.isNotEmpty) {
-  //       ChatMessage message = ChatMessage(
-  //         text: messageText,
-  //         user: currentUser,
-  //         createdAt: DateTime.now(),
-  //       );
-  //       _textController.clear();
-  //     }
-  //     setState(() {
-  //       _messages.insert(0, message); // Add the sent message to the chat
-  //       // Save the chat messages to the device storage
-  //       _saveChatsToStorage(_messages);
-  //     });
-  //     // Call _simulateChatbotReply with the user's message.
-  //     _simulateChatbotReply(message.text);
-  //   } else {
-  //     // User doesn't have entitlement
-  //     print('no entitlement free messages');
-  //     if (!messageTracker.isMessageLimitExceeded() ||
-  //         messageTracker.getRemainingMessageCount() > 0) {
-  //       // User has entitlement and hasn't exceeded the message limit
-  //       // Send the message
-  //       if (messageText.isNotEmpty) {
-  //         ChatMessage message = ChatMessage(
-  //           text: messageText,
-  //           user: currentUser,
-  //           createdAt: DateTime.now(),
-  //         );
-  //         _textController.clear();
-  //       }
-  //       setState(() {
-  //         _messages.insert(0, message); // Add the sent message to the chat
-  //         // Save the chat messages to the device storage
-  //         _saveChatsToStorage(_messages);
-  //       });
-  //       // Call _simulateChatbotReply with the user's message.
-  //       _simulateChatbotReply(message.text);
-  //       //Increment message count
-  //       messageTracker.incrementMessageCount();
-  //     } else {
-  //       //  message limit is exceeded
-  //       print('no free messages show upsell screen');
-  //       _showPaywall();
-  //       _textController.clear();
-  //       _showUpsellScreen();
-  //     }
-  //   }
-  // }
-
   // Function to show the paywall
-  void _showPaywall() {
+  void _showPaywall(
+    String message, // Text message to be sent
+    ReplyMessage
+        replyMessage, //  message to which the current message is a reply
+    MessageType messageType, // Type of message e.g text, image, audio
+  ) {
     // Display the paywall and send a message to the chatbot
-    ChatMessage paywallMessage = ChatMessage(
-      text: 'Please upgrade to continue your session with Sage',
-      // user: currentUser,
-      user: ChatUser(
-        id: '2',
-        name: 'Sage', // Customize the bot's name as needed
-      ),
+    final paywallMessage = Message(
+      message: 'Please upgrade to continue your session with Sage',
+      sendBy: sageUser.id, // Message by Sage
       createdAt: DateTime.now(),
+      replyMessage: replyMessage,
+      messageType: messageType,
     );
 
-    // setState(() {
-    //   _messages.insert(0, paywallMessage);
-    //   // _saveChatsToStorage(_messages);
-    // });
+    setState(() {
+      _messages.insert(0, paywallMessage);
+      // _saveChatsToStorage(_messages);
+    });
   }
 
   // send message to chatgpt and get back reply
   // Response code Error 400 means error in the chat gpt configuration
-  Future<void> _simulateChatbotReply(String userMassage) async {
+  Future<void> _simulateChatbotReply(String userMassage, 
+  MessageType messageType, // Type of message e.g text, image, audio
+  ) async {
     String userMessage = userMassage;
-    // print('User message is $userMessage');
+    print('User message is $userMessage');
 
     // Innitialize the prompt and api keys
     String myPrompt = obtainApiKeyPrompt.prompt;
@@ -756,20 +764,11 @@ class _ChatPageState extends State<ChatPage> {
 
         // // Add the chatbots reply to the chat
         Future.delayed(const Duration(seconds: 1), () {
-          // ChatMessage botMessage = ChatMessage(
-          //   text: chatbotReply,
-          //   user: ChatUser(
-          //     id: '2',
-          //     name: 'Sage', // Customize the bot's name as needed
-          //   ),
-          //   createdAt: DateTime.now(),
-          // );
-
           final botMessage = Message(
             message: chatbotReply,
             sendBy: sageUser.id,
             createdAt: DateTime.now(),
-            // messageType: messageType,
+            messageType: messageType,
           );
 
           setState(() {
@@ -778,11 +777,10 @@ class _ChatPageState extends State<ChatPage> {
             _chatController.initialMessageList.last.setStatus =
                 MessageStatus.read;
             _replyCounter.incrementReplyCount(); // Increment reply count
-            // int currentReplyCount = _replyCounter.getReplyCount() as int;
             // print('Total replies received: $currentReplyCount');
             _replyCounter.saveReplyCount(); // Save the updated reply count
-            // _saveChatsToStorage(_messages); // Save message to storage
-            _saveChatsToStorage(_chatController.initialMessageList);
+            _saveChatsToStorage(_messages); // Save message to storage
+            // _saveChatsToStorage(_chatController.initialMessageList);
           });
         });
       } else {
@@ -828,25 +826,3 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 }
-
-class ChatMessage {
-  final String text;
-  final ChatUser user;
-  final DateTime createdAt;
-
-  ChatMessage({
-    required this.text,
-    required this.user,
-    required this.createdAt,
-  });
-}
-
-// class ChatUser {
-//   final String id;
-//   final String name;
-
-//   ChatUser({
-//     required this.id,
-//     required this.name,
-//   });
-// }
