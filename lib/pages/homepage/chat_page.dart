@@ -9,7 +9,6 @@ import 'package:dash_chat_2/dash_chat_2.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 
-import 'chatPages/models/theme.dart';
 import 'chatPages/reset_message_tracker.dart';
 import 'chatPages/obtain_apikey_prompt.dart';
 import 'chatPages/rank_reply_counter.dart';
@@ -44,7 +43,6 @@ class _ChatPageState extends State<ChatPage> {
   final ObtainApiKeyPrompt obtainApiKeyPrompt = ObtainApiKeyPrompt();
   late ReplyCounter _replyCounter; // Initialize ReplyCounter instance
   late String _selectedBibleType;
-
   List messageList = [];
   late final _chatController;
 
@@ -68,6 +66,7 @@ class _ChatPageState extends State<ChatPage> {
   // check if the user has a valid entitlement
   void _initializeRevenueCat() async {
     try {
+      print('error initializeRevenueCat run');
       await RevenueCatManager.initializeRevenueCat();
       final hasEntitlement = await RevenueCatManager.checkEntitlement();
 
@@ -156,10 +155,7 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   // handle long press message
-  void _handleLongPressMessage(message) {
-    // setState(() {
-    //   _selectedMessage = message;
-    // });
+  void _handleLongPressMessage(ChatMessage message) {
     setState(() {
       if (_selectedMessage == message) {
         // Deselect the message if it was already selected
