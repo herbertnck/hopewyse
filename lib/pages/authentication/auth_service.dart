@@ -60,9 +60,12 @@ class AuthService {
         MaterialPageRoute(builder: (context) => const Home()),
       );
     } catch (error) {
+        print('Login failed: $error');
+
       if (error is FirebaseAuthException) {
         print('Login failed: ${error.message}');
       } else {
+        print('Unexpected error: $error');
         Fluttertoast.showToast(
           msg: 'An unexpected error occurred during login.',
           toastLength: Toast.LENGTH_LONG,
