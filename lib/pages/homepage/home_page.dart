@@ -1,5 +1,6 @@
+// To view books in the homepage
+
 import 'dart:async';
-import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -8,13 +9,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 import 'book_details.dart';
-import 'menu_drawer.dart';
-Import 
+import 'menuDrawer/menu_drawer.dart';
+
 class HomePage extends StatefulWidget {
-  const HomePage({Key? key}) : super(key: key);
+  const HomePage({super.key});
 
   @override
   _HomePageState createState() => _HomePageState();
@@ -24,14 +24,21 @@ class _HomePageState extends State<HomePage> {
   bool _showLoading = false;
   bool _isConnected = true;
   bool _showNoConnectionToast = false;
-  StreamSubscription<ConnectivityResult>? _connectivitySubscription;
-  final cacheManager = DefaultCacheManager();
+  List<ConnectivityResult> _connectionStatus = [ConnectivityResult.none];
+  final Connectivity _connectivity = Connectivity();
+  late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
 
   @override
   void initState() {
     super.initState();
     _checkConnectivity();
     _subscribeToConnectivityChanges();
+  }
+
+   @override
+  void dispose() {
+    _connectivitySubscription.cancel();
+    super.dispose();
   }
 
   @override
@@ -43,7 +50,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-// Function to check the internet connectivity
+  // Function to check the internet connectivity
   Future<void> _checkConnectivity() async {
     var connectivityResult = await Connectivity().checkConnectivity();
     setState(() {
@@ -52,6 +59,7 @@ class _HomePageState extends State<HomePage> {
     _showNoConnectionToastIfNeeded();
   }
 
+  // Display no internet connection toast if needed
   void _showNoConnectionToastIfNeeded() {
     if (!_isConnected) {
       showNoInternetToast(context);
@@ -71,17 +79,22 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Function to subscribe to connectivity changes
-  void _subscribeToConnectivityChanges() {
-    _connectivitySubscription =
-        Connectivity().onConnectivityChanged.listen((result) {
-      setState(() {
-        _isConnected = result != ConnectivityResult.none;
-      });
-      _showNoConnectionToastIfNeeded();
+  // Function to check for connectivity changes
+ void _subscribeToConnectivityChanges() {
+    _connectivitySubscription = _connectivity.onConnectivityChanged.listen((result) {
+      _updateConnectionStatus(result);
     });
   }
 
+  Future<void> _updateConnectionStatus(List<ConnectivityResult> result) async {
+    setState(() {
+      _connectionStatus = result;
+      _isConnected = _connectionStatus.any((res) => res != ConnectivityResult.none);
+    });
+    _showNoConnectionToastIfNeeded();
+  }
+
+  // Refresh books in homepage
   Future<void> _refreshPage() async {
     setState(() {
       _showLoading = true;
@@ -92,13 +105,6 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _showLoading = false;
     });
-  }
-
-  @override
-  void dispose() {
-    _connectivitySubscription?.cancel();
-
-    super.dispose();
   }
 
   @override
@@ -114,57 +120,29 @@ class _HomePageState extends State<HomePage> {
         // pinned: true,
         // expandedHeight: 100,
 
-        // Display user profile image or icon
-        // leading: Builder(
-        //   builder: (context) => IconButton(
-        //     onPressed: () => Scaffold.of(context).openDrawer(),
-        //     // icon: const FaIcon(FontAwesomeIcons.circleUser),
-        //     icon: ClipOval(
-        //       child: CachedNetworkImage(
-        //         imageUrl: FirebaseAuth.instance.currentUser?.photoURL ?? '',
-        //         cacheManager: cacheManager,
-        //         width: 40, // Set the desired width of the circular image
-        //         height: 40, // Set the desired height of the circular image
-        //         // use circle user icon as avater if the network connection
-        //         errorWidget: (context, url, error) =>
-        //             const FaIcon(FontAwesomeIcons.circleUser),
-        //         placeholder: (context, url) =>
-        //             const FaIcon(FontAwesomeIcons.circleUser),
-        //       ),
-        //     ),
-        //   ),
-        // ),
-
         leading: Builder(
-          builder: (context) => FutureBuilder<File>(
-            future: DefaultCacheManager().getSingleFile(
-              FirebaseAuth.instance.currentUser?.photoURL ?? '',
-            ),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const FaIcon(FontAwesomeIcons.circleUser);
-              } else if (snapshot.hasError) {
-                return const FaIcon(FontAwesomeIcons.circleUser);
-              } else if (snapshot.hasData) {
-                return IconButton(
-                  onPressed: () => Scaffold.of(context).openDrawer(),
-                  icon: CircleAvatar(
-                    backgroundImage: FileImage(snapshot.data!),
-                  ),
-                );
-              } else {
-                return IconButton(
-                    onPressed: () => Scaffold.of(context).openDrawer(),
-                    // Default icon if no image available
-                    icon: const FaIcon(FontAwesomeIcons.circleUser));
-              }
-            },
-          ),
+          builder: (context) {
+            final String? photoUrl =
+                FirebaseAuth.instance.currentUser?.photoURL;
+            if (photoUrl != null && photoUrl.isNotEmpty) {
+              return IconButton(
+                onPressed: () => Scaffold.of(context).openDrawer(),
+                icon: CircleAvatar(
+                  backgroundImage: CachedNetworkImageProvider(photoUrl),
+                ),
+              );
+            } else {
+              return IconButton(
+                onPressed: () => Scaffold.of(context).openDrawer(),
+                icon: const FaIcon(FontAwesomeIcons.circleUser),
+              );
+            }
+          },
         ),
 
         flexibleSpace: const FlexibleSpaceBar(
           title: Text(
-            'HopeWyse',
+            'Hope Wyse',
             textAlign: TextAlign.center,
           ),
         ),
@@ -191,6 +169,7 @@ class _HomePageState extends State<HomePage> {
                 child: StreamBuilder(
                   stream: FirebaseFirestore.instance
                       .collection('books')
+                      .orderBy('date', descending: true)  //Sort by date
                       .snapshots(),
                   builder: (context, snapshot) {
                     if (!snapshot.hasData) {
@@ -216,7 +195,6 @@ class _HomePageState extends State<HomePage> {
                           return InkWell(
                             onTap: () async {
                               if (_isConnected) {
-                                // String? path = await SplitEpub.downloadBook(book);
                                 // Navigate to book details page
                                 Navigator.of(context).push(MaterialPageRoute(
                                     builder: (context) => BookDetails(
