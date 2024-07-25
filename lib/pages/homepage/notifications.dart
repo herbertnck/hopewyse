@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:hopewyse/pages/homepage/menu_drawer.dart';
 import 'package:path/path.dart';
+
+import 'menuDrawer/menu_drawer.dart';
 
 // Custom observer to handle notifications
 class NotificationObserver extends NavigatorObserver {
@@ -17,8 +18,6 @@ class NotificationObserver extends NavigatorObserver {
           route.builder!.call(route.subtreeContext!) as NotificationPage;
 
       notificationRoute.showNotification(); // Show the notification
-
-      NavigatorService.openMenuDrawer();
     }
   }
 }
@@ -51,7 +50,7 @@ class NotificationPage extends StatelessWidget {
     );
 
     // Open MenuDrawer when notification is clicked
-    NavigatorService.openMenuDrawer();
+    NavigatorService.openMenuDrawer(context as BuildContext);
   }
 
   @override
@@ -81,10 +80,17 @@ class NotificationService {
         AndroidInitializationSettings('@mipmap/ic_launcher');
     const InitializationSettings initializationSettings =
         InitializationSettings(android: initializationSettingsAndroid);
-    await _flutterLocalNotificationsPlugin.initialize(initializationSettings);
+    await _flutterLocalNotificationsPlugin.initialize(
+      initializationSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) async {
+        if (response.payload != null && response.payload == 'rank_notification') {
+        NavigatorService.openMenuDrawer(NavigatorService.navigatorKey.currentContext!);
+        }
+      }
+      );
   }
 
-  Future<void> showRankNotification(String rankTitle) async {
+  Future<void> showRankNotification(String rankTitle, BuildContext context) async {
     const AndroidNotificationDetails androidPlatformChannelSpecifics =
         AndroidNotificationDetails(
       '0', // Channel ID
@@ -104,6 +110,9 @@ class NotificationService {
       platformChannelSpecifics,
       payload: 'rank_notification',
     );
+
+    // // Open menu drawer when notification is clicked
+    // NavigatorService.openMenuDrawer(context);
   }
 }
 
@@ -113,12 +122,12 @@ class NavigatorService {
       GlobalKey<NavigatorState>();
   static NavigatorState get navigator => navigatorKey.currentState!;
 
-  static void openMenuDrawer() {
+  static void openMenuDrawer(BuildContext context) {
     print('notification route to menu drawer');
-    navigator.pushReplacementNamed('/menu_drawer');
+    // navigator.pushReplacementNamed('/menu_drawer');
 
-    // Navigator.of(context).pushReplacement(
-    //   MaterialPageRoute(builder: (context) => const MenuDrawer()),
-    // );
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => const MenuDrawer()),
+    );
   }
 }
