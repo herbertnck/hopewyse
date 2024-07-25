@@ -5,12 +5,14 @@ import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:flutter_downloader/flutter_downloader.dart';
+import 'firebase_options.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-import 'firebase_options.dart';
 import 'pages/authentication/auth_service.dart';
 import 'pages/homepage/chatPages/constant.dart';
 import 'pages/homepage/chatPages/store_config.dart';
+import 'pages/homepage/menuDrawer/menu_drawer.dart';
 import 'pages/homepage/notifications.dart';
 
 // Future main() async {
@@ -61,19 +63,19 @@ void main() async {
       debug: true, // Set to false to disable printing console logs
       ignoreSsl: true // Set to false to disable working with http links
       );
-  FlutterDownloader.registerCallback(downloadCallback as DownloadCallback);
+  FlutterDownloader.registerCallback(downloadCallback);
 
   // Innitialize flutter Local notifications package
   FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
   await initializeNotifications();
 
-  runApp(const MyApp());
+  runApp(MyApp(flutterLocalNotificationsPlugin: flutterLocalNotificationsPlugin));
 
   //Trigger the notification after the app is launched
   final NotificationPage notificationPage =
       NotificationPage(flutterLocalNotificationsPlugin);
-  notificationPage.showNotification();
+  // notificationPage.showNotification();
 }
 
 // initialize chat package purchases
@@ -104,16 +106,25 @@ Future<void> initializeNotifications() async {
       AndroidInitializationSettings('@mipmap/ic_launcher');
   const InitializationSettings initializationSettings =
       InitializationSettings(android: initializationSettingsAndroid);
-  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+  await flutterLocalNotificationsPlugin.initialize(
+    initializationSettings,
+    onDidReceiveNotificationResponse: (NotificationResponse response) async {
+      if (response.payload != null && response.payload == 'rank_notification') {
+        NavigatorService.openMenuDrawer(NavigatorService.navigatorKey.currentContext!);     
+      }
+  }
+    );
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin;
+  const MyApp({super.key, required this.flutterLocalNotificationsPlugin});
 
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: NavigatorService.navigatorKey,  // Set the navigator key
       themeMode: ThemeMode.system,
       debugShowCheckedModeBanner: false,
       // Add a navigator observer to handle notifications when the app is in the foreground
@@ -121,6 +132,10 @@ class MyApp extends StatelessWidget {
         FirebaseAnalyticsObserver(analytics: FirebaseAnalytics.instance),
         NotificationObserver(), //Custom observer for handling notifications
       ],
+
+      routes: {
+        '/menu_drawer': (context) => const MenuDrawer(),
+      },
 
       // Check authentication state
       home: AuthService().handleAuthState(),
