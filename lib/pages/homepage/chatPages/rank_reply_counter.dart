@@ -1,19 +1,15 @@
-// Import necessary packages
-import 'package:hopewyse/pages/homepage/notifications.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../notifications.dart';
+
 class ReplyCounter {
+  late SharedPreferences _prefs;  // Initialize SharedPreferences instance
+  int replyCount = 0;   // Initialize reply count variable
   // Define the key for storing and retrieving reply count from SharedPreferences
   static const String _replyCountKey = 'reply_count';
-
-  // Initialize SharedPreferences instance
-  late SharedPreferences _prefs;
-
-  // Initialize reply count variable
-  int replyCount = 0;
   bool _initialized = false;
 
-  // Constructor
   ReplyCounter() {
     _initializeSharedPreferences();
     // _loadReplyCount();
@@ -25,7 +21,7 @@ class ReplyCounter {
     _initialized = true;
     await loadReplyCount();
   }
-
+  
   // Load reply count from SharedPreferences
   Future<void> loadReplyCount() async {
     replyCount = _prefs.getInt(_replyCountKey) ?? 0;
@@ -34,9 +30,9 @@ class ReplyCounter {
   }
 
   // Save reply count to SharedPreferences
-  Future<void> saveReplyCount() async {
+  Future<void> saveReplyCount(BuildContext context) async {
     await _prefs.setInt(_replyCountKey, replyCount);
-    checkForNewRank();
+    checkForNewRank(context);
   }
 
   // Get the current reply count
@@ -50,9 +46,9 @@ class ReplyCounter {
   }
 
   // Increment reply count
-  void incrementReplyCount() {
+  void incrementReplyCount(BuildContext context) {
     replyCount++;
-    saveReplyCount(); // Save the updated count to SharedPreferences
+    saveReplyCount(context); // Save the updated count to SharedPreferences
   }
 
   // // Reset reply count
@@ -106,7 +102,7 @@ class ReplyCounter {
       //20
       return "Divine Inquirer"; // 3
     } else if (replyCount >= 2) {
-      //10
+      //10, 3
       return "Spiritual Explorer"; // 2
     } else {
       return "Seeker of Light"; // 1
@@ -114,7 +110,7 @@ class ReplyCounter {
   }
 
   // Check for a new rank based on the current reply count
-  Future<void> checkForNewRank() async {
+  Future<void> checkForNewRank(BuildContext context) async {
     if (!_initialized) {
       await _initializeSharedPreferences();
     }
@@ -150,10 +146,12 @@ class ReplyCounter {
         print('Congratulations! You have achieved the rank of $currentRank.');
 
         // Show the rank notification
-        NotificationService().showRankNotification(currentRank);
+        NotificationService().showRankNotification(currentRank, context);
 
         break; // Exit the loop once the highest achieved rank is found
       }
     }
   }
+
+  
 }
