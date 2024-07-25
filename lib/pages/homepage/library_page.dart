@@ -1,14 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
-import 'menu_drawer.dart';
 import 'homePages/split_epub.dart';
 
 class LibraryPage extends StatefulWidget {
@@ -27,7 +22,6 @@ class LibraryPage extends StatefulWidget {
 class _LibraryPageState extends State<LibraryPage> {
   List<String> _bookTitles = [];
   List<Map<String, dynamic>> _libraryData = []; // Store the parsed library data
-  final cacheManager = DefaultCacheManager();
 
   // Instance of DownloadBook class
   final DownloadBook downloader = DownloadBook();
