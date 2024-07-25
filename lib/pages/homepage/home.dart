@@ -1,14 +1,15 @@
+//provides navigation for home_page, cht_page and library_page
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_translation/google_mlkit_translation.dart';
 
 import 'chat_page.dart';
 import 'home_page.dart';
 import 'library_page.dart';
+import 'chatscreen.dart';
+import '../authentication/googleai.dart';
 
 class Home extends StatefulWidget {
-  final book;
-
-  const Home({super.key, this.book});
+  const Home({super.key});
 
   @override
   _HomeState createState() => _HomeState();
@@ -64,6 +65,8 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
         children: const [
           HomePage(),
           ChatPage(),
+          // ChatScreen(),
+          GenerativeAISample(),
           LibraryPage(path: ''),
         ],
       ),
