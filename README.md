@@ -12,6 +12,7 @@
   Google services.json
   upload-keystore.jks
   key.properties
+  chatPages/constant
 
 # Google Play link 
   https://play.google.com/store/apps/details?id=com.hopewyse&hl=en&gl=US
