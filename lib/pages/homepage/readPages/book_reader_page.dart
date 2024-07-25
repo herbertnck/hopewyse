@@ -12,7 +12,7 @@ import 'reader_page.dart';
 class BookReaderPage extends StatefulWidget {
   final String path;
 
-  const BookReaderPage({Key? key, required this.path}) : super(key: key);
+  const BookReaderPage({super.key, required this.path});
 
   @override
   _BookReaderPageState createState() => _BookReaderPageState();
@@ -356,10 +356,10 @@ class ChapterList extends StatelessWidget {
   final Function(String) onChapterSelected;
 
   const ChapterList({
-    Key? key,
+    super.key,
     required this.epubBook,
     required this.onChapterSelected,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
