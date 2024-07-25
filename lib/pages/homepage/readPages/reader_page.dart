@@ -1,10 +1,9 @@
 import 'dart:async';
-import 'dart:io';
 
+import 'package:cosmos_epub/Model/book_progress_model.dart';
+import 'package:cosmos_epub/cosmos_epub.dart';
 import 'package:flutter/material.dart';
 import 'package:epubx/epubx.dart';
-import 'package:flutter_html/flutter_html.dart';
-import 'package:selectable/selectable.dart';
 import 'package:vocsy_epub_viewer/epub_viewer.dart';
 
 import 'location.dart';
@@ -18,13 +17,13 @@ class ReaderPage extends StatefulWidget {
   final String epubPath;
 
   const ReaderPage({
-    Key? key,
+    super.key,
     required this.epubBook,
     required this.selectedChapterId,
     required this.onAddNote,
     required this.onUpdateLocation,
     required this.epubPath,
-  }) : super(key: key);
+  });
 
   @override
   _ReaderPageState createState() => _ReaderPageState();
@@ -45,12 +44,31 @@ class _ReaderPageState extends State<ReaderPage> {
     super.initState();
     // Use the saved currentLocation to navigate to the location in the book
     navigateToSavedLocation();
+    initializeCosmosEpub ();
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
     super.dispose();
+  }
+
+  // Inintialize cosmos Epub reader
+  Future<void> initializeCosmosEpub() async {
+    WidgetsFlutterBinding.ensureInitialized();
+
+    var _initialized = await CosmosEpub.initialize();
+
+    if(_initialized) {
+      // Retrieved the saved book progress if available
+      BookProgressModel bookprogress = CosmosEpub.getBookProgress('bookId');
+      currentLocation = Location(
+        chapterIndex: bookprogress.currentChapterIndex!, 
+        startIndex: bookprogress.currentPageIndex!, 
+        endIndex: bookprogress.currentPageIndex!
+        );
+      navigateToSavedLocation();
+    }
   }
 
   // Add a method to navigate to the saved location in the book
@@ -60,136 +78,74 @@ class _ReaderPageState extends State<ReaderPage> {
     final endIndex = currentLocation.endIndex;
     try {
       // Check if the chapterIndex is valid
-      if (chapterIndex >= 0 &&
-          chapterIndex < widget.epubBook.Chapters!.length) {
-        final selectedChapter = widget.epubBook.Chapters![chapterIndex];
-        final totalCharacters = selectedChapter.HtmlContent!.length;
-
-        // Check if startIndex and endIndex are within bounds
-        if (startIndex >= 0 &&
-            endIndex >= startIndex &&
-            endIndex <= totalCharacters) {
-          // Calculate the approximate position in the chapter
-          final approximatePosition = (startIndex / totalCharacters) *
-              selectedChapter.HtmlContent!.length;
-
-          // Check if the _scrollController is attached before jumping
-          // Scroll to the calculated position
-          _scrollController.jumpTo(approximatePosition);
-        }
+      if (chapterIndex >= 0) {
+        // Use the saved chapter and page indices to navigate in CosmosEpub
+        CosmosEpub.setCurrentPageIndex('bookId', startIndex);
+        CosmosEpub.setCurrentChapterIndex('bookId', chapterIndex);
       }
     } catch (e) {
-      print('error scroll controller $e');
+      print('error navigating to saved location: $e');
     }
   }
 
-  // Method to open the EPUB file using vocsy_epub_viewer
+  // // Method to open the EPUB file using vocsy_epub_viewer
+  // Future<void> openEpub() async {
+  //   try {
+  //     // Set the EPUB viewer configuration
+  //     VocsyEpub.setConfig(
+  //       themeColor: Theme.of(context).primaryColor,
+  //       identifier: "epubBook",
+  //       scrollDirection: EpubScrollDirection.ALLDIRECTIONS,
+  //       allowSharing: true,
+  //       enableTts: true,
+  //       nightMode: true,
+  //     );
+
+  //     // Listen to the locator stream to track the current location
+  //     VocsyEpub.locatorStream.listen((locator) {
+  //     });
+
+  //     // Open the EPUB book from your existing widget's epubBook property
+  //     VocsyEpub.open(
+  //       widget.epubPath, // Provide the path to your EPUB file here
+  //       lastLocation: EpubLocator.fromJson({
+  //         "bookId": "2239",
+  //         "href": "/OEBPS/ch06.xhtml",
+  //         "created": 1539934158390,
+  //         "locations": {"cfi": "epubcfi(/0!/4/4[simple_book]/2/2/6)"}
+  //       }),
+  //     );
+  //   } catch (e) {
+  //     print('Error opening EPUB: $e');
+  //   }
+  // }
+
+  // Method to open the EPUB file using CosmosEpub
   Future<void> openEpub() async {
     try {
-      // Set the EPUB viewer configuration
-      VocsyEpub.setConfig(
-        themeColor: Theme.of(context).primaryColor,
-        identifier: "epubBook",
-        scrollDirection: EpubScrollDirection.ALLDIRECTIONS,
-        allowSharing: true,
-        enableTts: true,
-        nightMode: true,
-      );
-
-      // Listen to the locator stream to track the current location
-      VocsyEpub.locatorStream.listen((locator) {
-        // Handle locator data, convert it to your custom Location object, and update state.
-        // Example: Location location = Location.fromJson(locator);
-        // Update currentLocation and call onUpdateLocation(location);
-      });
-
-      // Open the EPUB book from your existing widget's epubBook property
-      VocsyEpub.open(
-        // 'bookPath', // Provide the path to your EPUB file here
-        widget.epubPath,
-        lastLocation: EpubLocator.fromJson({
-          "bookId": "2239",
-          "href": "/OEBPS/ch06.xhtml",
-          "created": 1539934158390,
-          "locations": {"cfi": "epubcfi(/0!/4/4[simple_book]/2/2/6)"}
-        }),
-      );
+      await CosmosEpub.openLocalBook(
+        localPath: widget.epubPath, 
+        context: context, 
+        bookId: 'bookId',
+        onPageFlip: (int currentPage, int totalPages) {
+          print('Current page is: $currentPage');
+        },
+        onLastPage: (lastPageIndex) {
+          print('This is the last page');
+        }
+        );
     } catch (e) {
-      print('Error opening EPUB: $e');
+      print('Error opening Epub: $e');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // EpubChapter selectedChapter = widget.epubBook.Chapters!.firstWhere(
-    //   (chapter) => chapter.Anchor == widget.selectedChapterId,
-    //   orElse: () => widget.epubBook.Chapters!.first,
-    // );
-
-    // return SingleChildScrollView(
-    //   controller: _scrollController,
-    //   padding: const EdgeInsets.all(16.0),
-    //   // child: Selectable(
-    //   //   child: Html(data: selectedChapter.HtmlContent),
-    //   //   selectWordOnDoubleTap: true,
-    //   //   popupMenuItems: [
-    //   //     // Do not add const to the selectable menu item below. it will cause an error
-    //   //     SelectableMenuItem(
-    //   //       type: SelectableMenuItemType.copy,
-    //   //       title: '',
-    //   //       icon: Icons.content_copy,
-    //   //     ),
-    //   //     SelectableMenuItem(
-    //   //       icon: Icons.star,
-    //   //       // title: 'Foo',
-    //   //       title: '',
-    //   //       isEnabled: (controller) => controller!.isTextSelected,
-    //   //       handler: (controller) {
-    //   //         showDialog<void>(
-    //   //           context: context,
-    //   //           barrierDismissible: true,
-    //   //           builder: (builder) {
-    //   //             return AlertDialog(
-    //   //               contentPadding: EdgeInsets.zero,
-    //   //               content: Container(
-    //   //                 padding: const EdgeInsets.all(16),
-    //   //                 child: Text(controller!.getSelection()!.text!),
-    //   //               ),
-    //   //               shape: RoundedRectangleBorder(
-    //   //                   borderRadius: BorderRadius.circular(8)),
-    //   //             );
-    //   //           },
-    //   //         );
-    //   //         return true;
-    //   //       },
-    //   //     ),
-    //   //     SelectableMenuItem(
-    //   //       // title'addNotes'
-    //   //       title: '', // Add a menu item for adding notes
-    //   //       icon: Icons.note_add_outlined,
-    //   //       isEnabled: (controller) => true, // Enable it always
-    //   //       handler: (controller) {
-    //   //         // Implement code to add a note
-    //   //         final selectedText = controller!.getSelection()!.text!;
-    //   //         final note = Note(
-    //   //           chapterTitle: selectedChapter.Title ?? '',
-    //   //           selectedText: selectedText,
-    //   //           location: currentLocation,
-    //   //         );
-    //   //         // Call the onAddNote function from BookReaderPage to save the note
-    //   //         widget.onAddNote(note, currentLocation);
-    //   //         return true;
-    //   //       },
-    //   //     ),
-    //   //   ],
-    //   // ),
-
-    // );
     // Add your UI elements here, including the EpubViewer widget
     return Scaffold(
-      appBar: AppBar(
-        title: Text('EPUB Reader'),
-      ),
+      // appBar: AppBar(
+      //   title: const Text('EPUB Reader'),
+      // ),
       body: Column(
         children: [
           // Your existing UI elements here...
@@ -200,13 +156,8 @@ class _ReaderPageState extends State<ReaderPage> {
               // Call the method to open the EPUB file
               openEpub();
             },
-            child: Text('Open EPUB'),
+            child: const Text('Open EPUB'),
           ),
-
-          // EpubViewer widget for rendering the EPUB content
-          // Expanded(
-          //   child: EpubViewer(),
-          // ),
         ],
       ),
     );
